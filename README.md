@@ -40,6 +40,8 @@ Without saved values, the app falls back to `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACC
 
 The default view is a clean chat. Pick a knowledge base in the left panel and ask a short question: **Enter** sends, **Shift+Enter** adds a new line. Answers show numbered citations. Click one, or a source below the answer, to open the passage in the right-hand panel with the words from your question highlighted. Each answer notes the model, the re-rank model, the passage count, and the time, followed by thumbs up/down and, with a judge model, quality scores. Without an LLM it lists the closest passages instead.
 
+With an LLM, up to three **follow-up questions** appear under the latest answer; click one to ask it. They are generated after the answer is shown (one extra LLM call), saved with the answer, and can be turned off or changed on the Advanced page.
+
 Chats are saved per knowledge base, on the server, so they survive reloads, switching knowledge bases, and restarts. The last chat reopens when you return. **New chat** starts another; **History** lists the saved chats for that knowledge base, to reopen or delete. Ratings and scores are restored with each answer. Deleting a chat keeps its audit-log entries; deleting a knowledge base removes its chats, and audit retention (`AUDIT_RETENTION_DAYS`) also removes chats that no longer have entries.
 
 Everything else is out of the way: **Manage** (per knowledge base) holds documents, chunking, and the chunk preview; **New knowledge base**, **Quality**, **Models**, and **Agents (MCP)** are in the left panel. The UI follows the system light or dark setting.
@@ -52,6 +54,7 @@ The **Advanced** page (`#/advanced`) groups the environment-variable overrides, 
 | --- | --- | --- |
 | Uploads and indexing | Largest upload (MB) | `RAGFLOW_MAX_UPLOAD_MB` |
 | Uploads and indexing | Most chunks per upload | `RAGFLOW_MAX_CHUNKS` |
+| Answers | Suggested follow-up questions (0 = off) | `RAGFLOW_FOLLOWUP_QUESTIONS` |
 | Audit log | Keep answers for (days), applies after restart | `RAGFLOW_AUDIT_RETENTION_DAYS` |
 | Vector store | Qdrant server URL and API key | `QDRANT_URL`, `QDRANT_API_KEY` |
 | Agents (MCP) | Allowed hosts for `/mcp`, applies after restart | `RAGFLOW_MCP_ALLOWED_HOSTS` |

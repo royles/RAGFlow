@@ -13,7 +13,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from backend import accesslog, advanced, audit, chats, chunk_preview, google_drive, judge, model_settings, model_test, service
+from backend import accesslog, advanced, audit, chats, chunk_preview, followups, google_drive, judge, model_settings, model_test, service
 from backend.catalog import public_catalog
 from backend.errors import BadRequest, NotFound
 from backend.mcp_server import mcp, transport_security
@@ -259,6 +259,11 @@ def get_conversation(conversation_id: str) -> dict:
 @app.delete("/api/conversations/{conversation_id}", status_code=204)
 def delete_conversation(conversation_id: str) -> None:
     _call(lambda: chats.delete(conversation_id))
+
+
+@app.post("/api/interactions/{interaction_id}/followups")
+def suggest_followups(interaction_id: str) -> dict:
+    return _call(lambda: {"questions": followups.suggest(interaction_id)})
 
 
 @app.get("/api/interactions/{interaction_id}")

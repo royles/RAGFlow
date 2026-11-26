@@ -100,6 +100,11 @@ def save_scores(interaction_id: str, scores: dict[str, Any]) -> None:
         conn.execute(f"UPDATE interactions SET {assignments} WHERE id = ?", (*fields.values(), interaction_id))
 
 
+def save_followups(interaction_id: str, questions: list[str]) -> None:
+    with db.connection() as conn:
+        conn.execute("UPDATE interactions SET followups = ? WHERE id = ?", (json.dumps(questions), interaction_id))
+
+
 def list_items(
     kb_id: str = "", rating: str = "", scored: str = "", limit: int = 50, offset: int = 0
 ) -> dict[str, Any]:
@@ -205,6 +210,7 @@ def _full(row) -> dict[str, Any]:
     item = dict(row)
     item.pop("seq", None)
     item["citations"] = json.loads(item["citations"])
+    item["followups"] = None if item.get("followups") is None else json.loads(item["followups"])
     item["faithfulness_claims"] = json.loads(item["faithfulness_claims"])
     item["rating"] = None if item["latest_rating"] in (None, "none") else item["latest_rating"]
     item["rating_reason"] = item.pop("latest_reason") or ""

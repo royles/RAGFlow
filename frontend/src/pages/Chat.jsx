@@ -195,13 +195,14 @@ export default function Chat({ id }) {
         <div className="thread">
           <div className="thread-inner">
             {turns.length === 0 ? <EmptyState kb={kb} /> : null}
-            {turns.map((turn) => (
+            {turns.map((turn, index) => (
               <Turn
                 key={turn.id}
                 turn={turn}
                 kbId={id}
                 selected={selected?.turnId === turn.id ? selected.n : null}
                 onSelect={(n) => setSelected({ turnId: turn.id, n })}
+                onFollowup={index === turns.length - 1 && !busy ? ask : null}
               />
             ))}
             <div ref={end} />
@@ -296,7 +297,37 @@ function Composer({ onSend, busy }) {
   )
 }
 
-function Turn({ turn, kbId, selected, onSelect }) {
+// Suggested next questions. They are made after the answer, so a failure only hides them.
+function Followups({ interactionId, initial, onPick }) {
+  const [questions, setQuestions] = useState(Array.isArray(initial) ? initial : null)
+
+  useEffect(() => {
+    if (questions) return undefined
+    let active = true
+    api
+      .followups(interactionId)
+      .then((result) => active && setQuestions(result.questions))
+      .catch(() => active && setQuestions([]))
+    return () => {
+      active = false
+    }
+  }, [interactionId])
+
+  if (!questions) return <p className="followups muted">Thinking of follow-up questions…</p>
+  if (!questions.length) return null
+  return (
+    <div className="followups">
+      <span className="followups-label">Follow-up questions</span>
+      {questions.map((question) => (
+        <button type="button" key={question} className="followup" onClick={() => onPick(question)}>
+          {question}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function Turn({ turn, kbId, selected, onSelect, onFollowup }) {
   const result = turn.result
   const citations = result?.citations || []
   const terms = queryTerms(turn.question)
@@ -368,6 +399,9 @@ function Turn({ turn, kbId, selected, onSelect }) {
                 <Scores interactionId={result.interaction_id} auto={result.scoring} initial={turn.interaction} />
               ) : null}
             </div>
+          ) : null}
+          {onFollowup && result.mode === "llm" && result.interaction_id ? (
+            <Followups interactionId={result.interaction_id} initial={turn.interaction?.followups} onPick={onFollowup} />
           ) : null}
         </div>
       ) : null}

@@ -46,6 +46,16 @@ SETTINGS = [
         "help": "Rejects a file that would produce more chunks than this. 0 means no limit. Every chunk is embedded, so huge files can run into the platform's request timeout.",
     },
     {
+        "key": "followup_count",
+        "env": "RAGFLOW_FOLLOWUP_QUESTIONS",
+        "group": "Answers",
+        "label": "Suggested follow-up questions",
+        "type": "int",
+        "max": 5,
+        "default": 3,
+        "help": "How many follow-up questions to suggest under the latest answer. 0 turns suggestions off. Each set costs one extra LLM call, made after the answer is shown.",
+    },
+    {
         "key": "audit_retention_days",
         "env": "RAGFLOW_AUDIT_RETENTION_DAYS",
         "group": "Audit log",

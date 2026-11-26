@@ -121,6 +121,8 @@ def _init(conn: sqlite3.Connection) -> None:
     answers = {row["name"] for row in conn.execute("PRAGMA table_info(interactions)")}
     if "conversation_id" not in answers:
         conn.execute("ALTER TABLE interactions ADD COLUMN conversation_id TEXT")
+    if "followups" not in answers:
+        conn.execute("ALTER TABLE interactions ADD COLUMN followups TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS interactions_conversation ON interactions(conversation_id)")
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge_bases)")}
     for column in _LEGACY_COLUMNS:

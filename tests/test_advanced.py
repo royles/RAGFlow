@@ -60,7 +60,7 @@ class AdvancedTests(unittest.TestCase):
         payload = self.http.get("/api/advanced").json()
         self.assertEqual(
             [group["name"] for group in payload["groups"]],
-            ["Uploads and indexing", "Audit log", "Vector store", "Agents (MCP)"],
+            ["Uploads and indexing", "Answers", "Audit log", "Vector store", "Agents (MCP)"],
         )
         for group in payload["groups"]:
             for item in group["settings"]:

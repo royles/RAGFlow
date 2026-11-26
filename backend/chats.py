@@ -133,6 +133,7 @@ def _turn(item: dict) -> dict:
                 "judge_model",
                 "judged_at",
                 "judge_error",
+                "followups",
             )
         },
     }

@@ -636,3 +636,12 @@ button.score:disabled { cursor: default; }
 .history .open { flex: 1; min-width: 0; display: grid; gap: 0.1rem; padding: 0.45rem 0.6rem; text-align: left; background: transparent; color: var(--text); border: 0; }
 .history .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; }
 .history small { color: var(--muted); font-size: 0.72rem; }
+
+/* Follow-up questions */
+.followups { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0.9rem 0 0; font-size: 0.82rem; }
+.followups-label { color: var(--muted); font-size: 0.74rem; width: 100%; }
+.followup {
+  text-align: left; padding: 0.35rem 0.7rem; border-radius: 999px; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border-strong); font-size: 0.82rem; line-height: 1.3;
+}
+.followup:hover { border-color: var(--accent); background: var(--accent-soft); }

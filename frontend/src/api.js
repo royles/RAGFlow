@@ -80,6 +80,7 @@ export const api = {
   listConversations: (kbId) => request(`/api/knowledge-bases/${kbId}/conversations`),
   getConversation: (id) => request(`/api/conversations/${id}`),
   deleteConversation: (id) => request(`/api/conversations/${id}`, { method: "DELETE" }),
+  followups: (interactionId) => request(`/api/interactions/${interactionId}/followups`, { method: "POST" }),
   getInteraction: (id) => request(`/api/interactions/${id}`),
   rate: (id, payload) =>
     request(`/api/interactions/${id}/feedback`, { method: "POST", body: JSON.stringify(payload) }),
