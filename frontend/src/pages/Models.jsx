@@ -228,24 +228,26 @@ export default function Models() {
         </section>
       </div>
 
-      {ROLES.map((role) => (
-        <RoleCard
-          key={role.id}
-          role={role}
-          catalog={catalog}
-          value={draft[role.id]}
-          fallbackRegion={draft.region || saved.bedrock.effective_region}
-          fallbackUrl={draft.base_url || saved.openai.effective_base_url || "https://api.openai.com/v1"}
-          result={results[role.id]}
-          testing={testing === role.id}
-          onBaseUrl={(baseUrl) => setRole(role.id, { base_url: baseUrl })}
-          onRegion={(region) => setRole(role.id, { region })}
-          onProvider={(provider) => changeProvider(role.id, provider)}
-          onModel={(model) => changeModel(role.id, model)}
-          onDimensions={(dimensions) => setRole(role.id, { dimensions })}
-          onTest={() => testRole(role.id)}
-        />
-      ))}
+      <div className="roles">
+        {ROLES.map((role) => (
+          <RoleCard
+            key={role.id}
+            role={role}
+            catalog={catalog}
+            value={draft[role.id]}
+            fallbackRegion={draft.region || saved.bedrock.effective_region}
+            fallbackUrl={draft.base_url || saved.openai.effective_base_url || "https://api.openai.com/v1"}
+            result={results[role.id]}
+            testing={testing === role.id}
+            onBaseUrl={(baseUrl) => setRole(role.id, { base_url: baseUrl })}
+            onRegion={(region) => setRole(role.id, { region })}
+            onProvider={(provider) => changeProvider(role.id, provider)}
+            onModel={(model) => changeModel(role.id, model)}
+            onDimensions={(dimensions) => setRole(role.id, { dimensions })}
+            onTest={() => testRole(role.id)}
+          />
+        ))}
+      </div>
 
       <section className="panel">
         <div className="row">
