@@ -1,0 +1,9 @@
+Northwind Field Notes
+
+The Dublin warehouse code is DUB-14. It ships replacement parts on Tuesdays.
+
+Refunds over 500 pounds need a manager's approval. Smaller refunds can be issued by the desk.
+
+The on-call network engineer this quarter is Priya Raman. Her escalation alias is net-oncall@example.com.
+
+Each knowledge base keeps its own Qdrant collection. HNSW with cosine distance is the usual nearest-neighbour setup.

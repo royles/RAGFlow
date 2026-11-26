@@ -1,0 +1,180 @@
+:root {
+  color-scheme: light;
+  --bg: #efe6d6;
+  --ink: #1d1914;
+  --muted: #5e564c;
+  --card: #fbf6ee;
+  --line: #e0d3c0;
+  --accent: #1f6a45;
+  --accent-ink: #f4fff8;
+  --danger: #8d2f24;
+  --shadow: 0 12px 30px rgba(60, 42, 20, 0.06);
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(31, 106, 69, 0.08), transparent 28rem),
+    var(--bg);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button, .file {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+}
+
+button:disabled { opacity: 0.6; cursor: wait; }
+
+button.danger {
+  background: transparent;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+a { color: var(--accent); }
+
+code {
+  font-family: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+  font-size: 0.92em;
+}
+
+.app { max-width: 1120px; margin: 0 auto; padding: 1.25rem; }
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.brand {
+  color: var(--ink);
+  text-decoration: none;
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+  font-size: 1.8rem;
+  letter-spacing: -0.03em;
+}
+
+.topbar p, .hint, .meta, .empty, .mode { color: var(--muted); }
+
+h1, h2, h3 {
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+h1 { font-size: 2.4rem; }
+h2 { font-size: 1.4rem; margin-bottom: 0.8rem; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 1.3fr 0.9fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.layout.single { grid-template-columns: 1fr; }
+
+.section-head { margin-bottom: 1rem; }
+.section-head p { margin: 0.35rem 0 0; }
+
+.panel, .cards a, .agent {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.panel { padding: 1.1rem 1.15rem 1.2rem; }
+
+.cards { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.75rem; }
+
+.cards a {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.95rem 1rem;
+  text-decoration: none;
+  color: inherit;
+  border-left: 4px solid var(--accent);
+}
+
+.cards span, .docs small, .agent span { color: var(--muted); }
+
+.field { display: grid; gap: 0.3rem; margin-bottom: 0.8rem; }
+.field span { font-size: 0.92rem; }
+.field small { color: var(--muted); }
+
+input, select, textarea {
+  width: 100%;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+}
+
+textarea { resize: vertical; }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; align-items: start; }
+
+.banner {
+  background: #fff1e8;
+  border: 1px solid #e7c2b2;
+  color: var(--danger);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+}
+
+.agent { margin-top: 1.25rem; padding: 1rem 1.1rem; }
+.agent ul { list-style: none; padding: 0; margin: 0.6rem 0 0; display: grid; gap: 0.45rem; }
+.agent li { display: grid; gap: 0.1rem; }
+
+.workspace { display: grid; gap: 1rem; }
+.columns { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 1rem; align-items: start; }
+
+.row { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; }
+
+.file { display: inline-block; }
+.file input { display: none; }
+
+.docs { list-style: none; padding: 0; margin: 1rem 0 0; display: grid; gap: 0.55rem; }
+.docs li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding-top: 0.55rem;
+}
+.docs div { display: grid; }
+.docs button, .settings .danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+
+.thread { display: grid; gap: 1rem; margin-top: 1rem; }
+.thread article { border-top: 1px solid var(--line); padding-top: 0.8rem; }
+.answer { white-space: pre-wrap; line-height: 1.45; }
+.citations { padding-left: 1.1rem; display: grid; gap: 0.55rem; }
+.citations li { display: grid; gap: 0.15rem; }
+.citations span { color: var(--muted); }
+
+.crumb { margin: 0 0 0.2rem; }
+
+@media (max-width: 860px) {
+  .layout, .columns, .split, .topbar { display: grid; grid-template-columns: 1fr; }
+  h1 { font-size: 2rem; }
+  .app { padding: 0.9rem; }
+}

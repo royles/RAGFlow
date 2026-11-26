@@ -1,0 +1,76 @@
+name: RAGFlow
+description: >
+  Cloudera AI application for knowledge bases. Create a base, set chunk size,
+  overlap, and the Qdrant nearest-neighbour algorithm, then ask grounded
+  questions from the React UI or over MCP. Amazon Bedrock models are optional.
+author: Christopher Royles
+specification_version: "1.0"
+prototype_version: "0.1"
+date: "2026-11-26"
+
+environment_variables:
+  RAGFLOW_DATA_DIR:
+    default: "data"
+    description: Directory for the SQLite catalog and the embedded Qdrant index.
+    required: false
+  QDRANT_URL:
+    default: ""
+    description: Optional Qdrant server URL. Leave empty to use the embedded index.
+    required: false
+  QDRANT_API_KEY:
+    default: ""
+    description: API key for QDRANT_URL, when the server requires one.
+    required: false
+  AWS_ACCESS_KEY_ID:
+    default: ""
+    description: Optional AWS access key for Bedrock. Leave empty to use the runtime role.
+    required: false
+  AWS_SECRET_ACCESS_KEY:
+    default: ""
+    description: Optional AWS secret key for Bedrock.
+    required: false
+  AWS_SESSION_TOKEN:
+    default: ""
+    description: Optional session token for temporary AWS credentials.
+    required: false
+  AWS_REGION:
+    default: "us-east-1"
+    description: Default AWS region when a knowledge base does not set one.
+    required: false
+  RAGFLOW_MCP_ALLOWED_HOSTS:
+    default: ""
+    description: >
+      Comma-separated Host headers allowed to call the MCP endpoint.
+      Loopback is always allowed. On Cloudera AI, leave this empty to accept
+      the application hostname assigned by the platform.
+    required: false
+
+runtimes:
+  - editor: Workbench
+    kernel: Python 3.11
+    edition: Standard
+
+tasks:
+  - type: create_job
+    name: Install Dependencies
+    entity_label: install_dependencies
+    script: scripts/install.py
+    kernel: python3
+    cpu: 1
+    memory: 2
+
+  - type: run_job
+    entity_label: install_dependencies
+
+  - type: start_application
+    name: RAGFlow
+    description: >
+      Knowledge base UI, REST API, and MCP server. Binds to 127.0.0.1 and
+      CDSW_APP_PORT. Agents call the MCP endpoint at /mcp.
+    entity_label: ragflow
+    subdomain: ragflow
+    script: start.py
+    kernel: python3
+    cpu: 2
+    memory: 4
+    static_subdomain: true
