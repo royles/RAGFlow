@@ -1,6 +1,7 @@
 """Knowledge base operations shared by the REST API and the MCP tools."""
 
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -182,6 +183,7 @@ def ask(name_or_id: str, question: str, top_k: int = 5) -> dict:
     With an LLM configured, the model must use those passages. Without one, the
     answer is the passages themselves, so the result is still grounded.
     """
+    started = time.monotonic()
     current = resolve(name_or_id)
     question = question.strip()
     if not question:
@@ -193,7 +195,7 @@ def ask(name_or_id: str, question: str, top_k: int = 5) -> dict:
     hits = _retrieve(current, question, top_k, cfg)
     if not hits:
         return {"knowledge_base": brief, "answer": "No matching passages were found.", "mode": "empty", "citations": []}
-    llm = cfg["llm"]
+    llm, rerank = cfg["llm"], cfg["rerank"]
     if llm["provider"] != "none":
         answer = models.generate(cfg, _prompt(question, hits))
         mode = "llm"
@@ -205,6 +207,8 @@ def ask(name_or_id: str, question: str, top_k: int = 5) -> dict:
         "answer": answer,
         "mode": mode,
         "llm": {"provider": llm["provider"], "model": llm["model"]} if mode == "llm" else None,
+        "rerank": {"provider": rerank["provider"], "model": rerank["model"]} if rerank["provider"] != "none" else None,
+        "elapsed_ms": int((time.monotonic() - started) * 1000),
         "citations": hits,
     }
 

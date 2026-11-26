@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react"
 import { api } from "../api"
-import { Field } from "./Library"
+import { Field } from "../components"
 
 const ROLES = [
   {
@@ -147,9 +147,6 @@ export default function Models() {
   return (
     <form className="workspace models" onSubmit={onSave}>
       <div className="section-head">
-        <p className="crumb">
-          <a href="#/">Knowledge bases</a>
-        </p>
         <h1>Models</h1>
         <p>Credentials and the three models RAGFlow uses. Secrets are stored on the server and never shown again.</p>
       </div>

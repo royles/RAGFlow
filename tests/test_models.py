@@ -166,6 +166,8 @@ class ModelApiTests(unittest.TestCase):
         self.assertEqual(answer["mode"], "llm")
         self.assertEqual(answer["llm"], {"provider": "openai", "model": "fake-chat"})
         self.assertIn("fake model", answer["answer"])
+        self.assertEqual(answer["rerank"], {"provider": "openai", "model": "fake-rerank"})
+        self.assertGreaterEqual(answer["elapsed_ms"], 0)
         scores = [item["rerank_score"] for item in answer["citations"]]
         self.assertEqual(scores, sorted(scores, reverse=True))
         self.assertIn("Dublin", answer["citations"][0]["text"])

@@ -35,6 +35,12 @@ Secrets are stored in `data/model_settings.json`, readable only by the app's use
 
 Without saved values, the app falls back to `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`, `OPENAI_API_KEY`, and `OPENAI_BASE_URL`, then to the Cloudera AI runtime role for AWS.
 
+## Using the app
+
+The default view is a clean chat. Pick a knowledge base in the left panel and ask a short question: **Enter** sends, **Shift+Enter** adds a new line. Answers show numbered citations. Click one, or a source below the answer, to open the passage in the right-hand panel with the words from your question highlighted. Each answer notes the model, the re-rank model, the passage count, and the time. Without an LLM it lists the closest passages instead.
+
+Everything else is out of the way: **Manage** (per knowledge base) holds documents, chunking, and the chunk preview; **New knowledge base**, **Models**, and **Agents (MCP)** are in the left panel. The UI follows the system light or dark setting.
+
 ## Run on Cloudera AI
 
 Import the repository as a project (prototype tasks are in `.project-metadata.yaml`). The install job runs `scripts/install.py` in the project runtime. It does not create a virtualenv. The application script is `start.py`. It listens on `127.0.0.1:$CDSW_APP_PORT`.
