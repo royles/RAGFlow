@@ -10,12 +10,11 @@ from backend.chunking import chunk_text
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
 from backend.extract import extract_text
-from backend.settings import sample_path
+from backend.settings import max_chunks, sample_path
 
 log = logging.getLogger("ragflow")
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
-MAX_CHUNKS = 400
 MAX_RERANK_POOL = 100
 _DISTANCES = {"cosine", "euclid", "dot"}
 _ALGORITHMS = {"hnsw", "exact"}
@@ -115,8 +114,12 @@ def add_document(kb_id: str, filename: str, data: bytes) -> dict:
     if not text:
         raise BadRequest("No text could be read from that file.")
     pieces = chunk_text(text, current["chunk_size"], current["chunk_overlap"])
-    if len(pieces) > MAX_CHUNKS:
-        raise BadRequest(f"That file produced {len(pieces)} chunks. The limit is {MAX_CHUNKS}.")
+    limit = max_chunks()
+    if limit and len(pieces) > limit:
+        raise BadRequest(
+            f"That file produced {len(pieces)} chunks. The limit is {limit}. "
+            "Use a larger chunk size, or raise RAGFLOW_MAX_CHUNKS (0 removes the limit)."
+        )
     vectors_batch = embed(
         current["embed_provider"], current["embed_model"], current["embed_dim"], pieces, "document"
     )

@@ -66,6 +66,8 @@ CDSW_APP_PORT=8000 python3 start.py
 
 Open `http://127.0.0.1:8000`, where 8000 is whatever you set. Load the sample handbook from a knowledge base and ask “What is the Dublin warehouse code?”
 
+An upload may produce at most `RAGFLOW_MAX_CHUNKS` chunks (default 5000; `0` removes the limit). Every chunk is embedded, and Bedrock embeddings are one request per chunk, so a very large file in one request can outlast the platform proxy timeout. Raise it if your embedding model is fast, or use a larger chunk size.
+
 Vectors are stored in `data/` unless `QDRANT_URL` points at a Qdrant server.
 
 ## Bedrock notes

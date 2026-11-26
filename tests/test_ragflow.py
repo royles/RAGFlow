@@ -5,6 +5,7 @@ import json
 import os
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import httpx
@@ -15,6 +16,7 @@ os.environ.setdefault("RAGFLOW_DATA_DIR", tempfile.mkdtemp(prefix="ragflow-impor
 from backend.bedrock import embedding_request
 from backend.chunking import chunk_text
 from backend.embeddings import local_embed
+from backend.settings import max_chunks
 from backend.vectors import close_client
 from tests.helpers import shared_app_server
 
@@ -63,6 +65,34 @@ class AppTests(unittest.TestCase):
         self.http.close()
         close_client()
         self.tmp.cleanup()
+
+    def upload_big(self):
+        kb = self.http.post("/api/knowledge-bases", json={"name": "Big", "chunk_size": 100, "chunk_overlap": 0}).json()
+        text = " ".join(f"word{i}" for i in range(12000))
+        return self.http.post(
+            f"/api/knowledge-bases/{kb['id']}/documents", files={"file": ("big.txt", text.encode(), "text/plain")}
+        )
+
+    def test_default_chunk_limit_is_generous(self):
+        response = self.upload_big()
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertGreater(response.json()["chunk_count"], 400)
+
+    def test_chunk_limit_is_configurable(self):
+        with mock.patch.dict(os.environ, {"RAGFLOW_MAX_CHUNKS": "50"}):
+            response = self.upload_big()
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("The limit is 50", response.json()["detail"])
+        self.assertIn("RAGFLOW_MAX_CHUNKS", response.json()["detail"])
+
+    def test_zero_removes_the_chunk_limit(self):
+        with mock.patch.dict(os.environ, {"RAGFLOW_MAX_CHUNKS": "0"}):
+            self.assertEqual(self.upload_big().status_code, 201)
+
+    def test_bad_limit_values_fall_back_to_the_default(self):
+        for value in ("abc", "-5"):
+            with mock.patch.dict(os.environ, {"RAGFLOW_MAX_CHUNKS": value}):
+                self.assertEqual(max_chunks(), 5000)
 
     def test_health_and_ui(self):
         health = self.http.get("/api/health")
