@@ -7,13 +7,15 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend import model_settings, model_test, service
+from backend import accesslog, chunk_preview, model_settings, model_test, service
 from backend.catalog import public_catalog
 from backend.errors import BadRequest, NotFound
 from backend.mcp_server import mcp, transport_security
 from backend.settings import ROOT
 
 DIST = ROOT / "frontend" / "dist"
+
+accesslog.install()
 
 # The MCP route is registered on this app, not mounted under a sub-path.
 # A Starlette Mount only matches /mcp/ (with a slash). MCP clients post to /mcp.
@@ -56,6 +58,18 @@ def health() -> dict:
 @app.get("/api/catalog")
 def catalog() -> dict:
     return public_catalog()
+
+
+@app.post("/api/chunk-preview/sample")
+def chunk_sample(payload: dict) -> dict:
+    return _call(lambda: chunk_preview.sample(bool(payload.get("use_llm"))))
+
+
+@app.post("/api/chunk-preview")
+def chunk_boundaries(payload: dict) -> dict:
+    return _call(
+        lambda: chunk_preview.preview(payload.get("text"), payload.get("chunk_size"), payload.get("chunk_overlap"))
+    )
 
 
 @app.get("/api/models")

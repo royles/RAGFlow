@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { api } from "../api"
+import ChunkPreview from "./ChunkPreview"
 
 const EMPTY = {
   name: "",
@@ -103,6 +104,7 @@ export default function Library() {
             <input name="chunk_overlap" type="number" min={0} value={form.chunk_overlap} onChange={update} />
           </Field>
         </div>
+        <ChunkPreview chunkSize={form.chunk_size} chunkOverlap={form.chunk_overlap} />
         <div className="split">
           <Field
             label="Nearest neighbour"

@@ -25,6 +25,9 @@ function errorMessage(body, fallback) {
 export const api = {
   catalog: () => request("/api/catalog"),
   agent: () => request("/api/agent"),
+  chunkSample: (useLlm) =>
+    request("/api/chunk-preview/sample", { method: "POST", body: JSON.stringify({ use_llm: useLlm }) }),
+  chunkPreview: (payload) => request("/api/chunk-preview", { method: "POST", body: JSON.stringify(payload) }),
   getModels: () => request("/api/models"),
   saveModels: (payload) => request("/api/models", { method: "PUT", body: JSON.stringify(payload) }),
   testModel: (role, settings) =>

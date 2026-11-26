@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { api } from "../api"
 import { Field } from "./Library"
+import ChunkPreview from "./ChunkPreview"
 
 export default function KnowledgeBase({ id }) {
   const [catalog, setCatalog] = useState(null)
@@ -262,6 +263,7 @@ export default function KnowledgeBase({ id }) {
             <input name="chunk_overlap" type="number" min={0} value={form.chunk_overlap} onChange={update} />
           </Field>
         </div>
+        <ChunkPreview chunkSize={form.chunk_size} chunkOverlap={form.chunk_overlap} />
         <p className="hint">
           Index: {kb.distance}, {kb.embed_dim} dimensions, {kb.embed_model}.
         </p>

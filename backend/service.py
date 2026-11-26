@@ -36,7 +36,7 @@ def create_knowledge_base(payload: dict) -> dict:
     description = str(payload.get("description") or "").strip()
     if len(description) > 500:
         raise BadRequest("Description must be 500 characters or fewer.")
-    chunk_size, chunk_overlap = _chunking(payload.get("chunk_size", 800), payload.get("chunk_overlap", 120))
+    chunk_size, chunk_overlap = check_chunking(payload.get("chunk_size", 800), payload.get("chunk_overlap", 120))
     distance = str(payload.get("distance") or "cosine")
     algorithm = str(payload.get("nn_algorithm") or "hnsw")
     _check_index(distance, algorithm)
@@ -81,7 +81,7 @@ def update_knowledge_base(kb_id: str, payload: dict) -> dict:
     if "chunk_size" in payload or "chunk_overlap" in payload:
         size = payload.get("chunk_size", current["chunk_size"])
         overlap = payload.get("chunk_overlap", current["chunk_overlap"])
-        fields["chunk_size"], fields["chunk_overlap"] = _chunking(size, overlap)
+        fields["chunk_size"], fields["chunk_overlap"] = check_chunking(size, overlap)
     if "nn_algorithm" in payload:
         algorithm = str(payload.get("nn_algorithm") or "")
         _check_index(current["distance"], algorithm)
@@ -283,7 +283,7 @@ def _name(value: str) -> str:
     return name
 
 
-def _chunking(size: object, overlap: object) -> tuple[int, int]:
+def check_chunking(size: object, overlap: object) -> tuple[int, int]:
     size_n = _int(size, "chunk_size")
     overlap_n = _int(overlap, "chunk_overlap")
     if size_n < 100 or size_n > 8000:

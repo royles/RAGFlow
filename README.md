@@ -12,6 +12,8 @@ Per knowledge base:
 - Nearest neighbour algorithm: HNSW or exact. On a Qdrant server, HNSW is the approximate index and exact scans every vector. The embedded index always scans every vector; the choice is still saved and used when `QDRANT_URL` points at a server.
 - Distance: cosine, Euclidean, or dot product
 
+Below the chunk fields, a **chunk preview** shows about 500 words describing the RAG process, cut with the current size and overlap. Each chunk is numbered and tinted, and text shared by two neighbouring chunks is striped amber, so the effect of a setting is visible as you type. With an LLM configured, **Write with <model>** has it write a fresh sample. Otherwise, or if the call fails, built-in text is used. The preview uses the same splitting code as indexing.
+
 Distance and the embedding model are fixed at creation because they define the Qdrant collection. The base keeps the embedding model that was configured when it was created. Chunking and the nearest-neighbour algorithm can be changed later. Chunking applies to the next upload.
 
 Globally, on the Models page (`#/models`):
@@ -46,6 +48,8 @@ cd frontend
 npm install
 npm run build
 ```
+
+The access log shows the first `GET /` request only. Later repeats of it (health checks, reloads) are hidden.
 
 ## Run locally
 
