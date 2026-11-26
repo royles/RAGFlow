@@ -96,7 +96,7 @@ export default function Manage({ id, onChange }) {
   // A few files go up and index at once. A bad file fails on its own row.
   async function runBatch(items) {
     if (!items.length) return
-    const batch = items.map((item) => ({ ...item, key: ++uploadKey, status: "queued", sent: 0 }))
+    const batch = items.map((item) => ({ ...item, key: ++uploadKey, uploadId: newUploadId(), status: "queued", sent: 0 }))
     setUploads(batch)
     setBusy("upload")
     setError("")
@@ -106,14 +106,23 @@ export default function Manage({ id, onChange }) {
       while (next < batch.length) {
         const item = batch[next++]
         patchUpload(item.key, { status: "uploading" })
+        // While the server indexes, ask it how far it has got: chunks made, embedded, and stored.
+        const timer = setInterval(async () => {
+          try {
+            const index = await api.getUpload(item.uploadId)
+            patchUpload(item.key, { index })
+          } catch {
+            // not started yet, or the server is busy
+          }
+        }, 500)
         try {
-          const row = await item.task((sent) =>
-            patchUpload(item.key, { sent, status: sent >= 1 ? "indexing" : "uploading" }),
-          )
-          patchUpload(item.key, { status: "done", sent: 1, chunks: row.chunk_count })
+          const row = await item.task((sent) => patchUpload(item.key, { sent, status: sent >= 1 ? "indexing" : "uploading" }), item.uploadId)
+          clearInterval(timer)
+          patchUpload(item.key, { status: "done", sent: 1, chunks: row.chunk_count, index: null })
           await refreshDocuments()
         } catch (err) {
-          patchUpload(item.key, { status: "failed", message: err.message })
+          clearInterval(timer)
+          patchUpload(item.key, { status: "failed", message: err.message, index: null })
         }
       }
     }
@@ -122,16 +131,16 @@ export default function Manage({ id, onChange }) {
   }
 
   const uploadFiles = (files) =>
-    runBatch(files.map((file) => ({ name: file.name, task: (progress) => api.uploadDocument(id, file, progress) })))
+    runBatch(files.map((file) => ({ name: file.name, task: (progress, uploadId) => api.uploadDocument(id, file, progress, uploadId) })))
 
   const importFromDrive = (files) => {
     setPicking(false)
     runBatch(
       files.map((file) => ({
         name: file.name,
-        task: (progress) => {
+        task: (progress, uploadId) => {
           progress(1)
-          return api.importDriveFile(id, file.id)
+          return api.importDriveFile(id, file.id, uploadId)
         },
       })),
     )
@@ -274,6 +283,24 @@ export default function Manage({ id, onChange }) {
 const UPLOAD_PARALLEL = 3
 let uploadKey = 0
 
+// crypto.randomUUID needs a secure context, which a proxied app may not have.
+const newUploadId = () =>
+  globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+
+// What the server reports while a file is indexed: how many chunks, and how far each stage has got.
+function indexing(index) {
+  if (!index || index.phase === "reading") return { text: "Reading file", total: 0 }
+  if (index.phase === "chunking") return { text: "Splitting into chunks", total: 0 }
+  if (!index.chunks) return { text: "Indexing", total: 0 }
+  const count = (n) => n.toLocaleString()
+  return {
+    text: `${count(index.chunks)} ${index.chunks === 1 ? "chunk" : "chunks"} · ${count(index.embedded)} embedded · ${count(index.stored)} in vector store`,
+    total: index.chunks,
+    embedded: index.embedded,
+    stored: index.stored,
+  }
+}
+
 const STATUS = {
   queued: "Waiting",
   uploading: "Uploading",
@@ -298,7 +325,10 @@ function UploadTracker({ uploads, busy, onClear }) {
         )}
       </div>
       <ul>
-        {uploads.map((item) => (
+        {uploads.map((item) => {
+          const progress = indexing(item.index)
+          const fraction = item.status === "done" || item.status === "failed" ? 1 : item.status === "indexing" && progress.total ? progress.stored / progress.total : item.sent
+          return (
           <li key={item.key} className={item.status}>
             <div className="line">
               <span className="name" title={item.name}>
@@ -307,22 +337,31 @@ function UploadTracker({ uploads, busy, onClear }) {
               <span className="state">
                 {STATUS[item.status]}
                 {item.status === "uploading" ? ` ${Math.round(item.sent * 100)}%` : ""}
-                {item.status === "done" ? ` · ${item.chunks} ${item.chunks === 1 ? "chunk" : "chunks"}` : ""}
+                {item.status === "indexing" ? ` · ${progress.text}` : ""}
+                {item.status === "done" ? ` · ${item.chunks} ${item.chunks === 1 ? "chunk" : "chunks"} stored` : ""}
               </span>
             </div>
             <div
-              className={`meter${item.status === "indexing" ? " busy" : ""}`}
+              className={`meter${item.status === "indexing" && !progress.total ? " busy" : ""}`}
               role="progressbar"
               aria-label={item.name}
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={Math.round((item.status === "done" || item.status === "failed" ? 1 : item.sent) * 100)}
+              aria-valuenow={Math.round(fraction * 100)}
             >
-              <span style={{ width: `${(item.status === "queued" ? 0 : item.sent) * 100}%` }} />
+              {item.status === "indexing" && progress.total ? (
+                <>
+                  <span className="ahead" style={{ width: `${(progress.embedded / progress.total) * 100}%` }} />
+                  <span style={{ width: `${(progress.stored / progress.total) * 100}%` }} />
+                </>
+              ) : (
+                <span style={{ width: `${(item.status === "queued" ? 0 : item.status === "indexing" ? 1 : fraction) * 100}%` }} />
+              )}
             </div>
             {item.message ? <p className="why-failed">{item.message}</p> : null}
           </li>
-        ))}
+          )
+        })}
       </ul>
     </div>
   )

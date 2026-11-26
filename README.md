@@ -44,6 +44,8 @@ With an LLM, up to three **follow-up questions** appear under the latest answer;
 
 Chats are saved per knowledge base, on the server, so they survive reloads, switching knowledge bases, and restarts. The last chat reopens when you return. **New chat** starts another; **History** lists the saved chats for that knowledge base, to reopen or delete. Ratings and scores are restored with each answer. Deleting a chat keeps its audit-log entries; deleting a knowledge base removes its chats, and audit retention (`AUDIT_RETENTION_DAYS`) also removes chats that no longer have entries.
 
+Uploads show a tracker per file. After the bytes arrive it shows live indexing progress: how many chunks the file produced, how many are embedded, and how many are in the vector store (chunks go through in batches of 64). A file is all or nothing: if indexing fails part way, the chunks already stored are removed. Progress is held in memory under an id the browser sends (`X-Upload-Id`, read at `GET /api/uploads/{id}`).
+
 Everything else is out of the way: **Manage** (per knowledge base) holds documents, chunking, and the chunk preview; **New knowledge base**, **Quality**, **Models**, and **Agents (MCP)** are in the left panel. The UI follows the system light or dark setting.
 
 ## Advanced settings

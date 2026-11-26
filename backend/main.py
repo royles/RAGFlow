@@ -9,11 +9,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from backend import accesslog, advanced, audit, chats, chunk_preview, google_drive, judge, model_settings, model_test, service
+from backend import accesslog, advanced, audit, chats, chunk_preview, google_drive, judge, model_settings, model_test, progress, service
 from backend.catalog import public_catalog
 from backend.errors import BadRequest, NotFound
 from backend.mcp_server import mcp, transport_security
@@ -165,20 +165,30 @@ def list_documents(kb_id: str) -> dict:
 
 
 @app.post("/api/knowledge-bases/{kb_id}/documents", status_code=201)
-async def upload_document(kb_id: str, file: UploadFile = File(...)) -> dict:
+async def upload_document(
+    kb_id: str, file: UploadFile = File(...), x_upload_id: str = Header(default="", max_length=100)
+) -> dict:
     data = await file.read()
     # Indexing embeds every chunk and can take a while. A worker thread keeps the
     # server responsive and lets several uploads index at the same time.
     return await run_in_threadpool(
-        lambda: _call(lambda: service.add_document(kb_id, file.filename or "document.txt", data))
+        lambda: _call(lambda: service.add_document(kb_id, file.filename or "document.txt", data, x_upload_id))
     )
 
 
 @app.post("/api/knowledge-bases/{kb_id}/documents/google-drive", status_code=201)
 async def import_drive_file(kb_id: str, payload: dict) -> dict:
     return await run_in_threadpool(
-        lambda: _call(lambda: service.add_drive_file(kb_id, str(payload.get("file_id") or "")))
+        lambda: _call(lambda: service.add_drive_file(kb_id, str(payload.get("file_id") or ""), str(payload.get("upload_id") or "")[:100]))
     )
+
+
+@app.get("/api/uploads/{upload_id}")
+def upload_progress(upload_id: str) -> dict:
+    job = progress.get(upload_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="No indexing is in progress under that id.")
+    return job
 
 
 @app.get("/api/google")

@@ -5,6 +5,8 @@ the app's local hashing embedder (384 dimensions) so retrieval still works.
 Re-ranking scores passages by words shared with the query.
 """
 
+import asyncio
+import os
 import re
 
 from fastapi import FastAPI, Request
@@ -54,6 +56,7 @@ async def chat(request: Request):
 async def embeddings(request: Request):
     body = await request.json()
     calls.append({"path": "embeddings", "host": request.headers.get("host"), "auth": request.headers.get("authorization"), "body": body})
+    await asyncio.sleep(float(os.environ.get("FAKE_EMBED_DELAY", "0")))
     inputs = body["input"] if isinstance(body["input"], list) else [body["input"]]
     return {
         "object": "list",

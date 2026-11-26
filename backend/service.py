@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import audit, chats, db, followups, google_drive, judge, model_settings, models, vectors
+from backend import audit, chats, db, followups, google_drive, judge, model_settings, models, progress, vectors
 from backend.chunking import chunk_text
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
@@ -103,7 +103,24 @@ def list_documents(kb_id: str) -> list[dict]:
     return db.list_documents(kb_id)
 
 
-def add_document(kb_id: str, filename: str, data: bytes) -> dict:
+INDEX_BATCH = 64
+
+
+def add_document(kb_id: str, filename: str, data: bytes, progress_id: str = "") -> dict:
+    """Read, chunk, embed, and store one file.
+
+    Chunks are embedded and stored a batch at a time, so `progress_id` can report
+    how many chunks exist, how many are embedded, and how many are in the vector store.
+    """
+    progress.start(progress_id, filename)
+    try:
+        return _index(kb_id, filename, data, progress_id)
+    except Exception as exc:
+        progress.update(progress_id, phase="failed", error=str(exc))
+        raise
+
+
+def _index(kb_id: str, filename: str, data: bytes, progress_id: str) -> dict:
     current = _require(kb_id)
     safe_name = Path(filename or "document.txt").name
     if not safe_name or safe_name in {".", ".."}:
@@ -114,6 +131,7 @@ def add_document(kb_id: str, filename: str, data: bytes) -> dict:
     text = extract_text(safe_name, data)
     if not text:
         raise BadRequest("No text could be read from that file.")
+    progress.update(progress_id, phase="chunking")
     pieces = chunk_text(text, current["chunk_size"], current["chunk_overlap"])
     limit = max_chunks()
     if limit and len(pieces) > limit:
@@ -121,46 +139,60 @@ def add_document(kb_id: str, filename: str, data: bytes) -> dict:
             f"That file produced {len(pieces)} chunks. The limit is {limit}. "
             "Use a larger chunk size, or raise RAGFLOW_MAX_CHUNKS (0 removes the limit)."
         )
-    vectors_batch = embed(
-        current["embed_provider"], current["embed_model"], current["embed_dim"], pieces, "document"
-    )
+    progress.update(progress_id, phase="embedding", chunks=len(pieces))
     document_id = str(uuid.uuid4())
-    points = []
-    for index, (piece, vector) in enumerate(zip(pieces, vectors_batch)):
-        points.append(
-            {
-                "id": str(uuid.uuid4()),
-                "vector": vector,
-                "payload": {
-                    "document_id": document_id,
-                    "filename": safe_name,
-                    "chunk_index": index,
-                    "text": piece,
-                },
-            }
-        )
-    vectors.upsert(current["collection"], points)
-    row = {
-        "id": document_id,
-        "kb_id": kb_id,
-        "filename": safe_name,
-        "byte_size": len(data),
-        "chunk_count": len(pieces),
-        "created_at": _now(),
-    }
     try:
+        for start in range(0, len(pieces), INDEX_BATCH):
+            batch = pieces[start : start + INDEX_BATCH]
+            embedded = embed(current["embed_provider"], current["embed_model"], current["embed_dim"], batch, "document")
+            progress.update(progress_id, embedded=start + len(batch))
+            vectors.upsert(
+                current["collection"],
+                [
+                    {
+                        "id": str(uuid.uuid4()),
+                        "vector": vector,
+                        "payload": {
+                            "document_id": document_id,
+                            "filename": safe_name,
+                            "chunk_index": start + offset,
+                            "text": piece,
+                        },
+                    }
+                    for offset, (piece, vector) in enumerate(zip(batch, embedded))
+                ],
+            )
+            progress.update(progress_id, stored=start + len(batch))
+        row = {
+            "id": document_id,
+            "kb_id": kb_id,
+            "filename": safe_name,
+            "byte_size": len(data),
+            "chunk_count": len(pieces),
+            "created_at": _now(),
+        }
         db.insert_document(row)
     except Exception:
-        vectors.delete_document(current["collection"], document_id)
+        # A file is all or nothing: drop the chunks already stored.
+        try:
+            vectors.delete_document(current["collection"], document_id)
+        except Exception:
+            log.exception("Could not remove partial chunks of %s", safe_name)
         raise
+    progress.update(progress_id, phase="done")
     return row
 
 
-def add_drive_file(kb_id: str, file_id: str) -> dict:
+def add_drive_file(kb_id: str, file_id: str, progress_id: str = "") -> dict:
     """Download one Google Drive file and index it like an upload."""
     _require(kb_id)
-    filename, data = google_drive.fetch(file_id)
-    return add_document(kb_id, filename, data)
+    progress.start(progress_id, "")
+    try:
+        filename, data = google_drive.fetch(file_id)
+    except Exception as exc:
+        progress.update(progress_id, phase="failed", error=str(exc))
+        raise
+    return add_document(kb_id, filename, data, progress_id)
 
 
 def add_sample(kb_id: str) -> dict:

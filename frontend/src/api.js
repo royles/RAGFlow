@@ -41,12 +41,14 @@ export const api = {
   deleteKnowledgeBase: (id) => request(`/api/knowledge-bases/${id}`, { method: "DELETE" }),
   listDocuments: (id) => request(`/api/knowledge-bases/${id}/documents`),
   // XHR rather than fetch, because only XHR reports how many bytes have been sent.
-  uploadDocument: (id, file, onProgress) =>
+  getUpload: (uploadId) => request(`/api/uploads/${uploadId}`),
+  uploadDocument: (id, file, onProgress, uploadId) =>
     new Promise((resolve, reject) => {
       const body = new FormData()
       body.append("file", file)
       const xhr = new XMLHttpRequest()
       xhr.open("POST", `/api/knowledge-bases/${id}/documents`)
+      if (uploadId) xhr.setRequestHeader("X-Upload-Id", uploadId)
       xhr.upload.onprogress = (event) => event.lengthComputable && onProgress?.(event.loaded / event.total)
       xhr.upload.onload = () => onProgress?.(1)
       xhr.onerror = () => reject(new Error("The upload could not reach the server."))
@@ -70,8 +72,11 @@ export const api = {
     request("/api/google/connect", { method: "POST", body: JSON.stringify({ redirect_uri: redirectUri }) }),
   googleDisconnect: () => request("/api/google/disconnect", { method: "POST" }),
   googleFiles: (params) => request(`/api/google/files?${new URLSearchParams(params)}`),
-  importDriveFile: (id, fileId) =>
-    request(`/api/knowledge-bases/${id}/documents/google-drive`, { method: "POST", body: JSON.stringify({ file_id: fileId }) }),
+  importDriveFile: (id, fileId, uploadId) =>
+    request(`/api/knowledge-bases/${id}/documents/google-drive`, {
+      method: "POST",
+      body: JSON.stringify({ file_id: fileId, upload_id: uploadId }),
+    }),
   loadSample: (id) => request(`/api/knowledge-bases/${id}/sample`, { method: "POST" }),
   deleteDocument: (id, documentId) =>
     request(`/api/knowledge-bases/${id}/documents/${documentId}`, { method: "DELETE" }),
