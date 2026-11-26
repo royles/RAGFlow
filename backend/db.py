@@ -5,6 +5,7 @@ file names, so the UI can list them without scanning the index.
 """
 
 import sqlite3
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -23,13 +24,26 @@ _KB_COLUMNS = (
 _LEGACY_COLUMNS = ("chat_provider", "chat_model", "bedrock_region")
 
 
+_init_lock = threading.Lock()
+_ready: set[str] = set()
+
+
 @contextmanager
 def connection() -> Iterator[sqlite3.Connection]:
     database = data_dir() / "ragflow.db"
-    conn = sqlite3.connect(database)
+    key = str(database)
+    # The schema is brought up to date once per database file. Doing it on every
+    # connection let two requests race to add the same column after an upgrade.
+    needs_init = key not in _ready or not database.exists()
+    conn = sqlite3.connect(database, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    _init(conn)
+    if needs_init:
+        with _init_lock:
+            if key not in _ready or conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'documents'").fetchone() is None:
+                _init(conn)
+                conn.commit()
+                _ready.add(key)
     try:
         yield conn
         conn.commit()
@@ -118,19 +132,27 @@ def _init(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS conversations_kb ON conversations(kb_id, updated_at);
         """
     )
-    answers = {row["name"] for row in conn.execute("PRAGMA table_info(interactions)")}
-    if "conversation_id" not in answers:
-        conn.execute("ALTER TABLE interactions ADD COLUMN conversation_id TEXT")
-    docs = {row["name"] for row in conn.execute("PRAGMA table_info(documents)")}
-    if "source_url" not in docs:
-        conn.execute("ALTER TABLE documents ADD COLUMN source_url TEXT NOT NULL DEFAULT ''")
-    if "followups" not in answers:
-        conn.execute("ALTER TABLE interactions ADD COLUMN followups TEXT")
+    _add_column(conn, "interactions", "conversation_id TEXT")
+    _add_column(conn, "interactions", "followups TEXT")
+    _add_column(conn, "documents", "source_url TEXT NOT NULL DEFAULT ''")
     conn.execute("CREATE INDEX IF NOT EXISTS interactions_conversation ON interactions(conversation_id)")
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge_bases)")}
     for column in _LEGACY_COLUMNS:
         if column in existing:
-            conn.execute(f"ALTER TABLE knowledge_bases DROP COLUMN {column}")
+            try:
+                conn.execute(f"ALTER TABLE knowledge_bases DROP COLUMN {column}")
+            except sqlite3.OperationalError as exc:
+                if "no such column" not in str(exc):
+                    raise
+
+
+def _add_column(conn: sqlite3.Connection, table: str, definition: str) -> None:
+    """Add a column unless it is already there. Safe if another process or thread added it first."""
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+    except sqlite3.OperationalError as exc:
+        if "duplicate column name" not in str(exc):
+            raise
 
 
 def insert_kb(row: dict[str, Any]) -> None:
