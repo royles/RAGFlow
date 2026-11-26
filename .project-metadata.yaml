@@ -46,8 +46,8 @@ environment_variables:
     description: Optional fallback base URL for an OpenAI-compatible server. Leave empty for api.openai.com.
     required: false
   RAGFLOW_MAX_CHUNKS:
-    default: "5000"
-    description: Most chunks one upload may produce, so a single upload cannot run past the proxy timeout. 0 means no limit.
+    default: "0"
+    description: Optional cap on the chunks one upload may produce. 0 means no limit.
     required: false
   RAGFLOW_MCP_ALLOWED_HOSTS:
     default: ""

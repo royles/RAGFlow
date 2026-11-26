@@ -16,11 +16,11 @@ def data_dir() -> Path:
     return path
 
 
-DEFAULT_MAX_CHUNKS = 5000
+DEFAULT_MAX_CHUNKS = 0
 
 
 def max_chunks() -> int:
-    """Most chunks one upload may produce. RAGFLOW_MAX_CHUNKS=0 means no limit.
+    """Most chunks one upload may produce. Unset or 0 means no limit.
 
     Every chunk is embedded, and Bedrock embeddings are one request per chunk,
     so the limit keeps a single upload from running past the proxy timeout.

@@ -85,14 +85,16 @@ class AppTests(unittest.TestCase):
         self.assertIn("The limit is 50", response.json()["detail"])
         self.assertIn("RAGFLOW_MAX_CHUNKS", response.json()["detail"])
 
-    def test_zero_removes_the_chunk_limit(self):
-        with mock.patch.dict(os.environ, {"RAGFLOW_MAX_CHUNKS": "0"}):
+    def test_there_is_no_chunk_limit_by_default(self):
+        with mock.patch.dict(os.environ):
+            os.environ.pop("RAGFLOW_MAX_CHUNKS", None)
+            self.assertEqual(max_chunks(), 0)
             self.assertEqual(self.upload_big().status_code, 201)
 
-    def test_bad_limit_values_fall_back_to_the_default(self):
-        for value in ("abc", "-5"):
+    def test_bad_limit_values_mean_no_limit(self):
+        for value in ("abc", "-5", "0"):
             with mock.patch.dict(os.environ, {"RAGFLOW_MAX_CHUNKS": value}):
-                self.assertEqual(max_chunks(), 5000)
+                self.assertEqual(max_chunks(), 0)
 
     def test_health_and_ui(self):
         health = self.http.get("/api/health")
