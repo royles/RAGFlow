@@ -202,11 +202,11 @@ export default function Models() {
         <section className="panel">
           <h2>OpenAI client API</h2>
           <Field
-            label="Base URL"
+            label="Default base URL"
             hint={
               saved.openai.effective_base_url && !draft.base_url
-                ? `Blank uses ${saved.openai.effective_base_url} from the environment.`
-                : "Blank uses https://api.openai.com/v1. Set it for Azure, vLLM, Ollama or another compatible server."
+                ? `Blank uses ${saved.openai.effective_base_url} from the environment. Each model below can set its own.`
+                : "Used by any OpenAI model below that has no base URL of its own. Blank means https://api.openai.com/v1."
             }
           >
             <input value={draft.base_url} onChange={(event) => setDraft({ ...draft, base_url: event.target.value })} placeholder="https://api.openai.com/v1" />
@@ -234,8 +234,10 @@ export default function Models() {
           role={role}
           catalog={catalog}
           value={draft[role.id]}
+          fallbackUrl={draft.base_url || saved.openai.effective_base_url || "https://api.openai.com/v1"}
           result={results[role.id]}
           testing={testing === role.id}
+          onBaseUrl={(baseUrl) => setRole(role.id, { base_url: baseUrl })}
           onProvider={(provider) => changeProvider(role.id, provider)}
           onModel={(model) => changeModel(role.id, model)}
           onDimensions={(dimensions) => setRole(role.id, { dimensions })}
@@ -284,7 +286,7 @@ function Secret({ label, name, isSet, value, onChange, cleared, onClear }) {
   )
 }
 
-function RoleCard({ role, catalog, value, result, testing, onProvider, onModel, onDimensions, onTest }) {
+function RoleCard({ role, catalog, value, fallbackUrl, result, testing, onProvider, onBaseUrl, onModel, onDimensions, onTest }) {
   const providers = catalog.providers[role.id]
   const suggestions = catalog.model_suggestions[role.id]?.[value.provider] || []
   const fixed = value.provider === "none" || value.provider === "local"
@@ -320,6 +322,14 @@ function RoleCard({ role, catalog, value, result, testing, onProvider, onModel, 
           </datalist>
         </Field>
       </div>
+      {value.provider === "openai" ? (
+        <Field
+          label="Base URL"
+          hint={value.base_url ? "This model is called at this address." : `Blank uses the default base URL: ${fallbackUrl}`}
+        >
+          <input value={value.base_url || ""} onChange={(event) => onBaseUrl(event.target.value)} placeholder={fallbackUrl} />
+        </Field>
+      ) : null}
       {role.id === "embedding" && !fixed ? (
         <Field label="Dimensions" hint="Must match what the model returns. The test checks this.">
           <input type="number" min={8} max={4096} value={value.dimensions} onChange={(event) => onDimensions(event.target.value)} />

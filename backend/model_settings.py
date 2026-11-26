@@ -31,9 +31,9 @@ LOCAL_DIM = 384
 DEFAULTS = {
     "bedrock": {"region": "", "access_key_id": "", "secret_access_key": "", "session_token": ""},
     "openai": {"base_url": "", "api_key": ""},
-    "llm": {"provider": "none", "model": ""},
-    "embedding": {"provider": "local", "model": LOCAL_MODEL, "dimensions": LOCAL_DIM},
-    "rerank": {"provider": "none", "model": ""},
+    "llm": {"provider": "none", "model": "", "base_url": ""},
+    "embedding": {"provider": "local", "model": LOCAL_MODEL, "dimensions": LOCAL_DIM, "base_url": ""},
+    "rerank": {"provider": "none", "model": "", "base_url": ""},
 }
 
 _lock = threading.Lock()
@@ -108,7 +108,7 @@ def apply_update(current: dict, payload: dict) -> dict:
             continue
         for key in DEFAULTS[role]:
             if key in section:
-                cfg[role][key] = section[key]
+                cfg[role][key] = str(section[key] or "").strip() if key == "base_url" else section[key]
 
     _validate(cfg)
     return cfg
@@ -125,6 +125,11 @@ def _validate(cfg: dict) -> None:
         raise BadRequest("A session token needs an access key id and secret access key.")
     if openai["base_url"] and not openai["base_url"].startswith(("http://", "https://")):
         raise BadRequest("The OpenAI base URL must start with http:// or https://.")
+    for role in ROLES:
+        url = str(cfg[role]["base_url"] or "").strip()
+        if url and not url.startswith(("http://", "https://")):
+            raise BadRequest(f"The {role} base URL must start with http:// or https://.")
+        cfg[role]["base_url"] = url
 
     for role, providers in ROLE_PROVIDERS.items():
         section = cfg[role]
@@ -175,9 +180,7 @@ def public(cfg: dict) -> dict:
             "api_key_source": _openai_key_source(cfg),
             "effective_base_url": openai["base_url"] or os.environ.get("OPENAI_BASE_URL", "").strip(),
         },
-        "llm": dict(cfg["llm"]),
-        "embedding": dict(cfg["embedding"]),
-        "rerank": dict(cfg["rerank"]),
+        **{role: {**cfg[role], "effective_base_url": openai_base_url(cfg, role)} for role in ROLES},
     }
 
 
@@ -200,8 +203,13 @@ def bedrock_credentials(cfg: dict) -> dict:
     }
 
 
-def openai_credentials(cfg: dict) -> dict:
-    base_url = cfg["openai"]["base_url"] or os.environ.get("OPENAI_BASE_URL", "").strip() or None
+def openai_base_url(cfg: dict, role: str) -> str:
+    """The role's own base URL, else the shared one, else OPENAI_BASE_URL. Blank means api.openai.com."""
+    return cfg[role]["base_url"] or cfg["openai"]["base_url"] or os.environ.get("OPENAI_BASE_URL", "").strip()
+
+
+def openai_credentials(cfg: dict, role: str) -> dict:
+    base_url = openai_base_url(cfg, role) or None
     api_key = cfg["openai"]["api_key"] or os.environ.get("OPENAI_API_KEY", "").strip()
     if not api_key:
         if not base_url:

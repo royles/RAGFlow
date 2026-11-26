@@ -22,7 +22,7 @@ def _words(text: str) -> set[str]:
 @app.post("/v1/chat/completions")
 async def chat(request: Request):
     body = await request.json()
-    calls.append({"path": "chat", "auth": request.headers.get("authorization"), "body": body})
+    calls.append({"path": "chat", "host": request.headers.get("host"), "auth": request.headers.get("authorization"), "body": body})
     prompt = body["messages"][0]["content"]
     text = "ready" if "single word" in prompt else "The fake model answers from passage [1]."
     return {
@@ -38,7 +38,7 @@ async def chat(request: Request):
 @app.post("/v1/embeddings")
 async def embeddings(request: Request):
     body = await request.json()
-    calls.append({"path": "embeddings", "auth": request.headers.get("authorization"), "body": body})
+    calls.append({"path": "embeddings", "host": request.headers.get("host"), "auth": request.headers.get("authorization"), "body": body})
     inputs = body["input"] if isinstance(body["input"], list) else [body["input"]]
     return {
         "object": "list",
@@ -51,7 +51,7 @@ async def embeddings(request: Request):
 @app.post("/v1/rerank")
 async def rerank(request: Request):
     body = await request.json()
-    calls.append({"path": "rerank", "auth": request.headers.get("authorization"), "body": body})
+    calls.append({"path": "rerank", "host": request.headers.get("host"), "auth": request.headers.get("authorization"), "body": body})
     query = _words(body["query"])
     scored = [
         {"index": index, "relevance_score": len(query & _words(document)) / (len(query) or 1)}

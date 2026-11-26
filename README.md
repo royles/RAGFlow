@@ -27,7 +27,7 @@ Globally, on the Models page (`#/models`):
 
 Each role has a **Test** button, and **Test all** runs the three. A test sends one small real request using what is on the page, saved or not, and reports success, latency, or the provider's error. The LLM and re-rank model apply to the next question. With a re-rank model, retrieval fetches a larger pool (at least 20 passages) and keeps the best `top_k`.
 
-Set a base URL to use Azure OpenAI, vLLM, Ollama, or any other compatible server. A server that needs no key works with only a base URL.
+Set a base URL to use Azure OpenAI, vLLM, Ollama, or any other compatible server. The OpenAI credentials card holds a default base URL and the API key. Each of the LLM, embedding, and re-rank cards can set its own base URL, so the three models can live on three servers. A blank role URL uses the default, then `OPENAI_BASE_URL`, then `https://api.openai.com/v1`. The API key is shared by all three. A server that needs no key works with only a base URL.
 
 ### Credentials
 

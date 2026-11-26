@@ -182,6 +182,59 @@ class ModelApiTests(unittest.TestCase):
         self.assertEqual(kb["embed_provider"], "local")
         self.assertNotIn("embeddings", [call["path"] for call in fake_openai.calls])
 
+    def test_each_role_can_use_its_own_base_url(self):
+        extra = [Server(fake_openai.app).start() for _ in range(3)]
+        self.addCleanup(lambda: [server.stop() for server in extra])
+        urls = {role: server.url + "/v1" for role, server in zip(("llm", "embedding", "rerank"), extra)}
+        body = self.openai_settings(openai={"base_url": "http://127.0.0.1:1/v1", "api_key": SECRET})
+        for role, url in urls.items():
+            body[role]["base_url"] = url
+        saved = self.save(body)
+        for role, url in urls.items():
+            self.assertEqual(saved[role]["base_url"], url)
+            self.assertEqual(saved[role]["effective_base_url"], url)
+        fake_openai.calls.clear()
+        for role in urls:
+            result = self.http.post("/api/models/test", json={"role": role, "settings": {}}).json()
+            self.assertTrue(result["ok"], result)
+        hosts = {call["path"]: call["host"] for call in fake_openai.calls}
+        self.assertEqual(
+            hosts,
+            {
+                "chat": f"127.0.0.1:{extra[0].port}",
+                "embeddings": f"127.0.0.1:{extra[1].port}",
+                "rerank": f"127.0.0.1:{extra[2].port}",
+            },
+        )
+
+    def test_a_role_without_its_own_base_url_uses_the_default(self):
+        other = Server(fake_openai.app).start()
+        self.addCleanup(other.stop)
+        body = self.openai_settings()
+        body["llm"]["base_url"] = other.url + "/v1"
+        saved = self.save(body)
+        self.assertEqual(saved["embedding"]["base_url"], "")
+        self.assertEqual(saved["embedding"]["effective_base_url"], self.fake.url + "/v1")
+        fake_openai.calls.clear()
+        for role in ("llm", "embedding"):
+            self.assertTrue(self.http.post("/api/models/test", json={"role": role, "settings": {}}).json()["ok"])
+        hosts = {call["path"]: call["host"] for call in fake_openai.calls}
+        self.assertEqual(hosts["chat"], f"127.0.0.1:{other.port}")
+        self.assertEqual(hosts["embeddings"], f"127.0.0.1:{self.fake.port}")
+
+    def test_role_base_url_must_be_http(self):
+        for role in ("llm", "embedding", "rerank"):
+            body = self.openai_settings()
+            body[role]["base_url"] = "localhost:9000"
+            self.assertEqual(self.http.put("/api/models", json=body).status_code, 400, role)
+
+    def test_unsaved_role_base_url_is_tested(self):
+        self.save(self.openai_settings(openai={"base_url": "http://127.0.0.1:1/v1", "api_key": SECRET}))
+        draft = {"llm": {"provider": "openai", "model": "fake-chat", "base_url": self.fake.url + "/v1"}}
+        result = self.http.post("/api/models/test", json={"role": "llm", "settings": draft}).json()
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(self.http.get("/api/models").json()["llm"]["base_url"], "")
+
     def test_old_chat_columns_are_dropped(self):
         close_client()
         path = os.path.join(self.tmp.name, "ragflow.db")
