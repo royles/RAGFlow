@@ -115,53 +115,75 @@ export function Feedback({ interactionId, initial = null, onChange }) {
 }
 
 export function ScoreChips({ item }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const claims = item.faithfulness_claims || []
   const unsupported = claims.filter((claim) => !claim.supported)
+  const scored = item.faithfulness !== null && item.faithfulness !== undefined
   return (
     <div className="scores">
       <div className="chips">
-        <button
-          type="button"
+        <span
           className={`score ${tone(item.faithfulness)}`}
-          onClick={() => setOpen(!open)}
-          aria-expanded={open}
-          title="Share of the answer's claims that its sources support"
-          disabled={item.faithfulness === null}
+          title="Share of the answer's claims that the retrieved passages support. Low means likely hallucination."
         >
-          Grounded {percent(item.faithfulness)}
+          Faithfulness {percent(item.faithfulness)}
           {unsupported.length ? ` · ${unsupported.length} unsupported` : ""}
-        </button>
-        <span className={`score ${tone(item.relevance)}`} title={item.relevance_reason || "How directly it answers the question"}>
-          Relevant {percent(item.relevance)}
         </span>
+        <span className={`score ${tone(item.relevance)}`} title="How directly the answer addresses the question">
+          Relevance {percent(item.relevance)}
+        </span>
+        {scored || item.relevance_reason ? (
+          <button type="button" className="link" onClick={() => setOpen(!open)} aria-expanded={open}>
+            {open ? "Hide details" : "Show details"}
+          </button>
+        ) : null}
         {item.judge_model ? <span className="muted tiny">judged by {item.judge_model}</span> : null}
       </div>
       {open ? (
-        <ul className="claims">
-          {claims.length === 0 ? <li className="muted">The answer made no factual claims to check.</li> : null}
-          {claims.map((claim, index) => (
-            <li key={index} className={claim.supported ? "ok" : "bad"}>
-              <b aria-label={claim.supported ? "Supported" : "Not supported"}>{claim.supported ? "✓" : "✗"}</b>
-              <span>
-                {claim.claim}
-                {claim.source ? <small> [{claim.source}]</small> : null}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <div className="score-details">
+          {scored ? (
+            <>
+              <p className="label">Faithfulness: each claim checked against the sources</p>
+              {claims.length === 0 ? (
+                <p className="muted tiny">The answer made no factual claims to check.</p>
+              ) : (
+                <ul className="claims">
+                  {claims.map((claim, index) => (
+                    <li key={index} className={claim.supported ? "ok" : "bad"}>
+                      <b aria-label={claim.supported ? "Supported" : "Not supported"}>{claim.supported ? "✓" : "✗"}</b>
+                      <span>
+                        {claim.claim}
+                        {claim.source ? <small> supported by [{claim.source}]</small> : <small> not found in the sources</small>}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          ) : null}
+          {item.relevance_reason ? (
+            <>
+              <p className="label">Relevance: the judge's reason</p>
+              <p className="reason">{item.relevance_reason}</p>
+            </>
+          ) : null}
+        </div>
       ) : null}
-      {item.judge_error ? <p className="muted tiny">{item.judge_error}</p> : null}
+      {item.judge_error ? <p className="banner">{item.judge_error}</p> : null}
     </div>
   )
 }
 
 // Scores arrive after the answer, so this polls until the judge has finished.
-export function Scores({ interactionId }) {
+// With automatic scoring off, a button scores the answer on request.
+export function Scores({ interactionId, auto = true }) {
   const [item, setItem] = useState(null)
   const [gaveUp, setGaveUp] = useState(false)
+  const [requested, setRequested] = useState(false)
+  const [error, setError] = useState("")
 
   useEffect(() => {
+    if (!auto) return undefined
     let active = true
     let tries = 0
     async function poll() {
@@ -179,9 +201,33 @@ export function Scores({ interactionId }) {
     return () => {
       active = false
     }
-  }, [interactionId])
+  }, [interactionId, auto])
+
+  async function scoreNow() {
+    setRequested(true)
+    setError("")
+    try {
+      setItem(await api.scoreInteraction(interactionId))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRequested(false)
+    }
+  }
 
   if (item) return <ScoreChips item={item} />
-  if (gaveUp) return <p className="muted tiny">Scoring is taking a while. See the Quality page.</p>
-  return <p className="muted tiny scoring">Scoring…</p>
+  if (!auto || gaveUp) {
+    return (
+      <div className="scores">
+        <div className="chips">
+          <button type="button" className="secondary" onClick={scoreNow} disabled={requested}>
+            {requested ? "Scoring…" : "Score faithfulness and relevance"}
+          </button>
+          {gaveUp ? <span className="muted tiny">Automatic scoring is taking a while.</span> : null}
+        </div>
+        {error ? <p className="banner">{error}</p> : null}
+      </div>
+    )
+  }
+  return <p className="muted tiny scoring">Scoring faithfulness and relevance…</p>
 }

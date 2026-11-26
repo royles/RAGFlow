@@ -64,13 +64,14 @@ def judge_model(cfg: dict) -> str:
 
 
 def score(cfg: dict, question: str, answer: str, passages: list[str]) -> dict:
-    """Score one answer. Raises BadRequest when no judge is configured.
+    """Score one answer with the judge model, or with the LLM when no judge is set.
 
     A failure in one check does not discard the other: whatever worked is
     returned, and judge_error says what did not.
     """
     if not enabled(cfg):
-        raise BadRequest("No judge model is configured. Set one on the Models page.")
+        # Judge set to "none" means no automatic scoring. Scoring on request uses the LLM.
+        cfg = {**cfg, "judge": {**cfg["judge"], "provider": "same"}}
     result: dict = {"judge_model": judge_model(cfg), "judge_error": ""}
     errors = []
     try:
@@ -122,8 +123,9 @@ def check(cfg: dict) -> str:
 def _run(interaction_id: str) -> None:
     try:
         score_interaction(interaction_id)
-    except Exception:
+    except Exception as exc:
         log.exception("Could not score answer %s", interaction_id)
+        audit.save_scores(interaction_id, {"judge_error": _message(exc, model_settings.load())})
 
 
 def _faithfulness(cfg: dict, answer: str, passages: list[str]) -> dict:

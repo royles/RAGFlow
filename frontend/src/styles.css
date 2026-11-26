@@ -616,3 +616,8 @@ button.score:disabled { cursor: default; }
 .setting-input input { flex: 1; min-width: 0; }
 .setting .hint { margin: 0; }
 .value-line { margin: 0; font-family: var(--mono); font-size: 0.85rem; word-break: break-all; }
+
+.score-details { display: grid; gap: 0.35rem; padding: 0.6rem 0.8rem; background: var(--sunken); border-radius: var(--radius); }
+.score-details .label { margin: 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.score-details .claims { padding: 0; background: transparent; }
+.score-details .reason { margin: 0; font-size: 0.85rem; }

@@ -22,7 +22,7 @@ const ROLES = [
     id: "judge",
     title: "Judge model (optional)",
     blurb:
-      "Scores each answer for faithfulness to its sources and relevance to the question. Use a different model from the LLM for an independent check, or the same one to keep setup simple.",
+      "Scores every answer for faithfulness to its sources and relevance to the question. The default is the same model as the LLM. Use a different model for an independent check, or None to score only when you ask."
   },
 ]
 

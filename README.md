@@ -77,12 +77,12 @@ Under each answer, **thumbs up/down** record a rating. A thumbs-down offers an o
 
 Every answer is written to an **audit log** in `data/ragflow.db` with the question, the answer, the cited passages, the models and chunk settings used, the source (UI, MCP, or API), and the time. Feedback is append-only: changing or withdrawing a vote adds an event, so the history is kept and the latest event is the current rating. The log outlives the knowledge base it came from. Set `RAGFLOW_AUDIT_RETENTION_DAYS` to delete older answers at startup (default `0`, keep everything).
 
-With a **judge model** set on the Models page, each LLM-written answer is scored in the background, so answers are never slowed:
+Each LLM-written answer is scored in the background, so answers are never slowed. The judge defaults to **Same as the LLM**; set a different model on the Models page for an independent check, or **None** to score only on request (an answer then shows a **Score faithfulness and relevance** button, which uses the LLM). Each answer shows both scores as chips, with the claim-by-claim check and the judge's reason underneath:
 
 - **Faithfulness (groundedness)**: the judge splits the answer into claims and checks each against the retrieved passages. The score is the share supported. Click the chip to see which claims are not. This is the main hallucination check.
 - **Answer relevance**: a 1 to 5 rating of how directly the answer addresses the question, shown as a percentage.
 
-Pick **Same as the LLM** for the simplest setup, or a different model for an independent check. Judge scores come from an LLM, so treat them as a screening signal and calibrate them against thumbs. They cost two extra model calls per answer.
+Judge scores come from an LLM, so treat them as a screening signal and calibrate them against thumbs. They cost two extra model calls per answer.
 
 The **Quality** page (`#/quality`) shows approval rate and average scores, filters by knowledge base, rating, or low faithfulness, expands each answer to show its sources and settings, and scores older answers on demand. **Export JSONL** (full records including cited passages and feedback events) or **CSV** to build test questions or tune chunking and re-ranking. The same data is at `GET /api/audit` and `GET /api/audit/export?format=jsonl|csv`.
 

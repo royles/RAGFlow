@@ -35,7 +35,7 @@ DEFAULTS = {
     "llm": {"provider": "none", "model": "", "base_url": "", "region": ""},
     "embedding": {"provider": "local", "model": LOCAL_MODEL, "dimensions": LOCAL_DIM, "base_url": "", "region": ""},
     "rerank": {"provider": "none", "model": "", "base_url": "", "region": ""},
-    "judge": {"provider": "none", "model": "", "base_url": "", "region": ""},
+    "judge": {"provider": "same", "model": "", "base_url": "", "region": ""},
 }
 
 _lock = threading.Lock()

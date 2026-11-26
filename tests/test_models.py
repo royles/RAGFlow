@@ -54,6 +54,7 @@ class ModelApiTests(unittest.TestCase):
             "llm": {"provider": "openai", "model": "fake-chat"},
             "embedding": {"provider": "openai", "model": "fake-embed", "dimensions": 384},
             "rerank": {"provider": "openai", "model": "fake-rerank"},
+            "judge": {"provider": "none"},
         }
         body.update(overrides)
         return body

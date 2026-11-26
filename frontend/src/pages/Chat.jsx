@@ -273,7 +273,7 @@ function Turn({ turn, kbId, selected, onSelect }) {
           {result.interaction_id ? (
             <div className="review">
               <Feedback interactionId={result.interaction_id} />
-              {result.scoring ? <Scores interactionId={result.interaction_id} /> : null}
+              {result.mode === "llm" ? <Scores interactionId={result.interaction_id} auto={result.scoring} /> : null}
             </div>
           ) : null}
         </div>

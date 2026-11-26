@@ -182,17 +182,35 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(item["faithfulness"], 1.0)
         self.assertEqual(item["relevance"], 1.0)
 
-    def test_nothing_is_scored_without_a_judge_and_manual_scoring_explains(self):
+    def test_answers_are_scored_by_default_with_the_llm(self):
+        body = {
+            "openai": {"base_url": self.fake.url + "/v1", "api_key": SECRET},
+            "llm": {"provider": "openai", "model": "fake-chat"},
+            "embedding": {"provider": "openai", "model": "fake-embed", "dimensions": 384},
+        }
+        self.assertEqual(self.http.put("/api/models", json=body).status_code, 200)
+        self.assertEqual(self.http.get("/api/models").json()["judge"]["provider"], "same")
+        answer = self.ask(self.kb())
+        self.assertTrue(answer["scoring"])
+        item = self.wait_for_scores(answer["interaction_id"])
+        self.assertEqual((item["faithfulness"], item["relevance"]), (1.0, 1.0))
+
+    def test_with_no_judge_nothing_is_scored_until_asked_and_then_the_llm_scores(self):
+        self.configure()
+        answer = self.ask(self.kb())
+        self.assertFalse(answer["scoring"])
+        time.sleep(0.2)
+        self.assertIsNone(self.http.get(f"/api/interactions/{answer['interaction_id']}").json()["judged_at"])
+        scored = self.http.post(f"/api/interactions/{answer['interaction_id']}/score").json()
+        self.assertEqual((scored["faithfulness"], scored["judge_model"]), (1.0, "fake-chat"))
+
+    def test_scoring_on_request_needs_an_llm(self):
         self.configure()
         interaction_id = self.ask(self.kb())["interaction_id"]
-        time.sleep(0.2)
-        self.assertIsNone(self.http.get(f"/api/interactions/{interaction_id}").json()["judged_at"])
-        response = self.http.post(f"/api/interactions/{interaction_id}/score")
-        self.assertEqual(response.status_code, 400)
-        self.assertIn("judge", response.json()["detail"])
-        self.configure(judge="same")
+        self.http.put("/api/models", json={"llm": {"provider": "none"}})
         scored = self.http.post(f"/api/interactions/{interaction_id}/score").json()
-        self.assertEqual(scored["faithfulness"], 1.0)
+        self.assertIsNone(scored["faithfulness"])
+        self.assertIn("No LLM", scored["judge_error"])
 
     def test_unparseable_judge_replies_are_recorded_not_raised(self):
         self.configure(judge="same")
