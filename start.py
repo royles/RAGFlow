@@ -14,11 +14,10 @@ import uvicorn
 
 
 def port() -> int:
-    for name in ("CDSW_APP_PORT", "APP_PORT"):
-        value = os.environ.get(name, "").strip()
-        if value:
-            return int(value)
-    return 8000
+    value = os.environ.get("CDSW_APP_PORT", "").strip()
+    if not value:
+        raise SystemExit("CDSW_APP_PORT is not set. Cloudera AI sets it for applications; set it yourself to run locally.")
+    return int(value)
 
 
 def main() -> None:

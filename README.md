@@ -38,9 +38,15 @@ python3 -m pip install -r requirements.txt
 python3 start.py
 ```
 
-Open `http://127.0.0.1:8000`. Load the sample handbook from a knowledge base and ask “What is the Dublin warehouse code?”
+`start.py` reads the port from `CDSW_APP_PORT`, which Cloudera AI sets for applications. Locally, set it yourself:
 
-Set `CDSW_APP_PORT` or `APP_PORT` to choose the port. Vectors are stored in `data/` unless `QDRANT_URL` points at a Qdrant server.
+```bash
+CDSW_APP_PORT=8000 python3 start.py
+```
+
+Open `http://127.0.0.1:8000`, where 8000 is whatever you set. Load the sample handbook from a knowledge base and ask “What is the Dublin warehouse code?”
+
+Vectors are stored in `data/` unless `QDRANT_URL` points at a Qdrant server.
 
 ## Bedrock
 
@@ -64,7 +70,7 @@ On Cloudera AI the process binds to loopback and the platform proxies the public
 {
   "mcpServers": {
     "ragflow": {
-      "url": "http://127.0.0.1:8000/mcp"
+      "url": "http://127.0.0.1:<CDSW_APP_PORT>/mcp"
     }
   }
 }
