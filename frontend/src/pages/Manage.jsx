@@ -11,6 +11,8 @@ export default function Manage({ id, onChange }) {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState("")
+  const [progress, setProgress] = useState("")
+  const [dragging, setDragging] = useState(false)
 
   async function reload() {
     const [nextKb, nextDocs, nextCatalog] = await Promise.all([
@@ -85,14 +87,40 @@ export default function Manage({ id, onChange }) {
     })
   }
 
+  // Files go up one at a time so one bad file does not lose the rest.
+  async function uploadFiles(files) {
+    if (!files.length) return
+    setBusy("upload")
+    setError("")
+    setNotice("")
+    const failed = []
+    for (const [index, file] of files.entries()) {
+      setProgress(files.length > 1 ? `Indexing ${index + 1} of ${files.length}…` : "Indexing…")
+      try {
+        await api.uploadDocument(id, file)
+        await refreshDocuments()
+      } catch (err) {
+        failed.push(`${file.name}: ${err.message}`)
+      }
+    }
+    setProgress("")
+    setBusy("")
+    const done = files.length - failed.length
+    if (done) setNotice(`Added ${done} ${done === 1 ? "document" : "documents"}.`)
+    if (failed.length) setError(failed.join(" "))
+  }
+
   const onUpload = (event) => {
-    const file = event.target.files?.[0]
+    const files = [...(event.target.files || [])]
     event.target.value = ""
-    if (!file) return
-    run("upload", async () => {
-      await api.uploadDocument(id, file)
-      await refreshDocuments()
-    })
+    uploadFiles(files)
+  }
+
+  const onDrop = (event) => {
+    event.preventDefault()
+    setDragging(false)
+    if (busy) return
+    uploadFiles([...event.dataTransfer.files])
   }
 
   const onSample = () =>
@@ -127,18 +155,26 @@ export default function Manage({ id, onChange }) {
       {error ? <p className="banner">{error}</p> : null}
       {notice ? <p className="notice">{notice}</p> : null}
 
-      <section className="panel">
+      <section
+        className={`panel${dragging ? " dragging" : ""}`}
+        onDragOver={(event) => {
+          event.preventDefault()
+          setDragging(true)
+        }}
+        onDragLeave={(event) => !event.currentTarget.contains(event.relatedTarget) && setDragging(false)}
+        onDrop={onDrop}
+      >
         <h2>Documents</h2>
         <div className="row">
           <label className="file button">
-            <input type="file" accept=".txt,.md,.markdown,.csv,.pdf,.docx" onChange={onUpload} />
-            {busy === "upload" ? "Indexing…" : "Upload"}
+            <input type="file" multiple accept=".txt,.md,.markdown,.csv,.pdf,.docx" onChange={onUpload} disabled={busy === "upload"} />
+            {busy === "upload" ? progress || "Indexing…" : "Upload"}
           </label>
           <button type="button" className="secondary" onClick={onSample} disabled={busy === "sample"}>
             {busy === "sample" ? "Indexing…" : "Load sample"}
           </button>
         </div>
-        <p className="hint">Text, Markdown, CSV, PDF, and DOCX. New files use the chunk size saved below.</p>
+        <p className="hint">Select or drop several files at once. Text, Markdown, CSV, PDF, and DOCX. New files use the chunk size saved below.</p>
         {documents.length === 0 ? (
           <p className="empty">Nothing uploaded yet.</p>
         ) : (

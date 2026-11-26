@@ -45,3 +45,15 @@ def audit_retention_days() -> int:
         return max(0, int(os.environ.get("RAGFLOW_AUDIT_RETENTION_DAYS", "").strip() or 0))
     except ValueError:
         return 0
+
+
+def max_upload_bytes() -> int:
+    """Largest file one upload may carry. RAGFLOW_MAX_UPLOAD_MB unset or 0 means no limit.
+
+    The file is read into memory, so set a limit if the runtime has little RAM.
+    """
+    try:
+        megabytes = int(os.environ.get("RAGFLOW_MAX_UPLOAD_MB", "").strip() or 0)
+    except ValueError:
+        return 0
+    return max(0, megabytes) * 1024 * 1024

@@ -11,11 +11,10 @@ from backend.chunking import chunk_text
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
 from backend.extract import extract_text
-from backend.settings import max_chunks, sample_path
+from backend.settings import max_chunks, max_upload_bytes, sample_path
 
 log = logging.getLogger("ragflow")
 
-MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 MAX_RERANK_POOL = 100
 _DISTANCES = {"cosine", "euclid", "dot"}
 _ALGORITHMS = {"hnsw", "exact"}
@@ -109,8 +108,9 @@ def add_document(kb_id: str, filename: str, data: bytes) -> dict:
     safe_name = Path(filename or "document.txt").name
     if not safe_name or safe_name in {".", ".."}:
         raise BadRequest("The upload needs a file name.")
-    if len(data) > MAX_UPLOAD_BYTES:
-        raise BadRequest("Files must be 15 MB or smaller.")
+    size_limit = max_upload_bytes()
+    if size_limit and len(data) > size_limit:
+        raise BadRequest(f"Files must be {size_limit // (1024 * 1024)} MB or smaller (RAGFLOW_MAX_UPLOAD_MB).")
     text = extract_text(safe_name, data)
     if not text:
         raise BadRequest("No text could be read from that file.")

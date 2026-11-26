@@ -156,6 +156,20 @@ class AppTests(unittest.TestCase):
         )
         self.assertEqual(answer.json()["mode"], "empty")
 
+    def test_upload_size_limit_is_off_by_default_and_configurable(self):
+        created = self._create("Big files")
+        url = f"/api/knowledge-bases/{created['id']}/documents"
+        body = ("Dublin warehouse code DUB-14. " * 80000).encode()
+        self.assertGreater(len(body), 2 * 1024 * 1024)
+        os.environ["RAGFLOW_MAX_UPLOAD_MB"] = "1"
+        try:
+            rejected = self.http.post(url, files={"file": ("big.txt", body)})
+        finally:
+            del os.environ["RAGFLOW_MAX_UPLOAD_MB"]
+        self.assertEqual(rejected.status_code, 400)
+        self.assertIn("1 MB", rejected.json()["detail"])
+        self.assertEqual(self.http.post(url, files={"file": ("big.txt", body)}).status_code, 201)
+
     def test_settings_round_trip(self):
         created = self._create("Editable")
         updated = self.http.patch(

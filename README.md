@@ -90,6 +90,10 @@ Open `http://127.0.0.1:8000`, where 8000 is whatever you set. Load the sample ha
 
 An upload may produce at most `RAGFLOW_MAX_CHUNKS` chunks (default 5000; `0` removes the limit). Every chunk is embedded, and Bedrock embeddings are one request per chunk, so a very large file in one request can outlast the platform proxy timeout. Raise it if your embedding model is fast, or use a larger chunk size.
 
+Select or drag several files onto a knowledge base's Documents panel to upload them together. They are indexed one at a time, and a file that fails is reported without stopping the rest.
+
+There is no file size limit by default. Uploads are read into memory, so set `RAGFLOW_MAX_UPLOAD_MB` to cap them if the runtime has little RAM. The platform proxy may also have its own request size limit.
+
 Vectors are stored in `data/` unless `QDRANT_URL` points at a Qdrant server.
 
 ## Bedrock notes
