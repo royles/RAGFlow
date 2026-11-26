@@ -13,6 +13,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 from backend.errors import BadRequest
 
+_PROFILE_PREFIXES = ("us", "eu", "apac", "jp", "au", "ca", "global", "us-gov")
 _BLANK_KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
 
 
@@ -54,7 +55,7 @@ def embed_texts(creds: dict, model: str, texts: list[str], dim: int, purpose: st
         try:
             response = runtime.invoke_model(modelId=model, body=json.dumps(body))
         except (BotoCoreError, ClientError) as exc:
-            raise BadRequest(f"Amazon Bedrock rejected the embedding request: {exc}") from exc
+            raise BadRequest(f"Amazon Bedrock rejected the embedding request: {exc}{_profile_hint(exc, model)}") from exc
         vector = _read_vector(json.loads(response["body"].read()))
         if len(vector) != dim:
             raise BadRequest(f"{model} returned {len(vector)} dimensions, but {dim} are configured.")
@@ -72,7 +73,7 @@ def converse(creds: dict, model: str, prompt: str) -> str:
             inferenceConfig={"maxTokens": 800, "temperature": 0.2},
         )
     except (BotoCoreError, ClientError) as exc:
-        raise BadRequest(f"Amazon Bedrock rejected the chat request: {exc}") from exc
+        raise BadRequest(f"Amazon Bedrock rejected the chat request: {exc}{_profile_hint(exc, model)}") from exc
     parts = response.get("output", {}).get("message", {}).get("content", [])
     text = "".join(part.get("text", "") for part in parts).strip()
     if not text:
@@ -105,6 +106,17 @@ def rerank(creds: dict, model: str, query: str, documents: list[str], top_n: int
     except (BotoCoreError, ClientError) as exc:
         raise BadRequest(f"Amazon Bedrock rejected the re-rank request: {exc}{_rerank_hint(exc, creds['region'])}") from exc
     return [(int(row["index"]), float(row["relevanceScore"])) for row in response["results"]]
+
+
+def _profile_hint(exc: Exception, model: str) -> str:
+    """Newer models can only be called through an inference profile id, not the bare model id."""
+    if "inference profile" not in str(exc) or model.startswith("arn:"):
+        return ""
+    bare = model.split(".", 1)[1] if model.split(".", 1)[0] in _PROFILE_PREFIXES else model
+    return (
+        f" This model needs an inference profile id. Add a region prefix, for example "
+        f"us.{bare}, eu.{bare} or global.{bare}, or paste the inference profile ARN."
+    )
 
 
 def _rerank_hint(exc: Exception, region: str) -> str:

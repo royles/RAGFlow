@@ -392,6 +392,24 @@ class BedrockTests(unittest.TestCase):
         self.assertIn("The region used was us-east-1", result["detail"])
         self.assertIn("us-west-2", result["detail"])
 
+    def test_on_demand_error_suggests_an_inference_profile(self):
+        self.stub("bedrock-runtime").add_client_error(
+            "converse",
+            "ValidationException",
+            "Invocation of model ID anthropic.claude-test with on-demand throughput isn\u2019t supported. "
+            "Retry your request with the ID or ARN of an inference profile that contains this model.",
+        )
+        detail = self.run_role("llm")["detail"]
+        self.assertIn("us.anthropic.claude-test", detail)
+        self.assertIn("global.anthropic.claude-test", detail)
+
+    def test_inference_profile_hint_does_not_double_the_prefix(self):
+        error = bedrock.ClientError({"Error": {"Code": "ValidationException", "Message": "use an inference profile"}}, "Converse")
+        hint = bedrock._profile_hint(error, "us.anthropic.claude-test")
+        self.assertIn("eu.anthropic.claude-test", hint)
+        self.assertNotIn("us.us.", hint)
+        self.assertEqual(bedrock._profile_hint(error, "arn:aws:bedrock:us-east-1:1:inference-profile/x"), "")
+
     def test_other_errors_get_no_region_hint(self):
         self.stub("bedrock-agent-runtime").add_client_error("rerank", "AccessDeniedException", "No access")
         self.assertNotIn("region used", self.run_role("rerank")["detail"])

@@ -24,7 +24,9 @@ PROVIDER_LABELS = {
 MODEL_SUGGESTIONS = {
     "llm": {
         "bedrock": [
-            {"model": "anthropic.claude-haiku-4-5-20251001-v1:0", "label": "Claude Haiku 4.5"},
+            {"model": "us.anthropic.claude-haiku-4-5-20251001-v1:0", "label": "Claude Haiku 4.5 (US inference profile)"},
+            {"model": "eu.anthropic.claude-haiku-4-5-20251001-v1:0", "label": "Claude Haiku 4.5 (EU inference profile)"},
+            {"model": "global.anthropic.claude-haiku-4-5-20251001-v1:0", "label": "Claude Haiku 4.5 (global inference profile)"},
             {"model": "amazon.nova-lite-v1:0", "label": "Amazon Nova Lite"},
             {"model": "amazon.nova-pro-v1:0", "label": "Amazon Nova Pro"},
         ],
