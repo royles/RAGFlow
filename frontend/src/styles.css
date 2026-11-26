@@ -621,3 +621,18 @@ button.score:disabled { cursor: default; }
 .score-details .label { margin: 0; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
 .score-details .claims { padding: 0; background: transparent; }
 .score-details .reason { margin: 0; font-size: 0.85rem; }
+
+/* Saved chats */
+.history-wrap { position: relative; }
+.history-backdrop { position: fixed; inset: 0; z-index: 20; }
+.history {
+  position: absolute; right: 0; top: calc(100% + 0.3rem); z-index: 21; width: min(24rem, 90vw); max-height: 24rem; overflow-y: auto;
+  margin: 0; padding: 0.3rem; list-style: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 12px 30px rgb(0 0 0 / 0.18);
+}
+.history li { display: flex; align-items: center; gap: 0.25rem; border-radius: 6px; }
+.history li.current { background: var(--accent-soft); }
+.history li:hover { background: var(--sunken); }
+.history .open { flex: 1; min-width: 0; display: grid; gap: 0.1rem; padding: 0.45rem 0.6rem; text-align: left; background: transparent; color: var(--text); border: 0; }
+.history .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; }
+.history small { color: var(--muted); font-size: 0.72rem; }

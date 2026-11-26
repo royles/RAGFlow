@@ -107,8 +107,21 @@ def _init(conn: sqlite3.Connection) -> None:
             FOREIGN KEY (interaction_id) REFERENCES interactions(id) ON DELETE CASCADE
         );
         CREATE INDEX IF NOT EXISTS feedback_interaction ON feedback(interaction_id);
+        CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            kb_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (kb_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS conversations_kb ON conversations(kb_id, updated_at);
         """
     )
+    answers = {row["name"] for row in conn.execute("PRAGMA table_info(interactions)")}
+    if "conversation_id" not in answers:
+        conn.execute("ALTER TABLE interactions ADD COLUMN conversation_id TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS interactions_conversation ON interactions(conversation_id)")
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge_bases)")}
     for column in _LEGACY_COLUMNS:
         if column in existing:

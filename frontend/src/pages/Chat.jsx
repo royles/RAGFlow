@@ -4,34 +4,70 @@ import { Icon } from "../components"
 import { Feedback, Scores } from "../quality"
 import { Answer, Highlight, queryTerms } from "../lib/text"
 
-// Conversations survive switching between knowledge bases, not a page reload.
-const threads = new Map()
 const TOP_K = 5
 let nextTurn = 0
 
+// The saved chat to reopen for a knowledge base. "new" means the user left on an empty chat.
+const rememberKey = (id) => `ragflow:chat:${id}`
+
+const fromServer = (turn) => ({ id: `saved-${turn.id}`, question: turn.question, status: "done", result: turn.result, interaction: turn.interaction })
+
+function when(stamp) {
+  return new Date(stamp).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+}
+
 export default function Chat({ id }) {
   const [kb, setKb] = useState(null)
-  const [turns, setTurns] = useState(() => threads.get(id) || [])
+  const [chatId, setChatId] = useState(null)
+  const [chats, setChats] = useState([])
+  const [turns, setTurns] = useState([])
   const [selected, setSelected] = useState(null)
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [history, setHistory] = useState(false)
   const end = useRef(null)
+
+  async function openChat(chat) {
+    const saved = await api.getConversation(chat)
+    setChatId(chat)
+    setTurns(saved.turns.map(fromServer))
+    setSelected(null)
+    localStorage.setItem(rememberKey(id), chat)
+  }
+
+  const refreshChats = () =>
+    api
+      .listConversations(id)
+      .then((result) => {
+        setChats(result.conversations)
+        return result.conversations
+      })
+      .catch(() => [])
 
   useEffect(() => {
     let active = true
-    api
-      .getKnowledgeBase(id)
-      .then((next) => active && setKb(next))
-      .catch((err) => active && setError(err.message))
     localStorage.setItem("ragflow:last-kb", id)
+    async function load() {
+      try {
+        const [next, list] = await Promise.all([api.getKnowledgeBase(id), api.listConversations(id)])
+        if (!active) return
+        setKb(next)
+        setChats(list.conversations)
+        const remembered = localStorage.getItem(rememberKey(id))
+        const target = remembered === "new" ? null : list.conversations.find((chat) => chat.id === remembered) || list.conversations[0]
+        if (target) await openChat(target.id)
+      } catch (err) {
+        if (active) setError(err.message)
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+    load()
     return () => {
       active = false
     }
   }, [id])
-
-  useEffect(() => {
-    threads.set(id, turns)
-  }, [id, turns])
 
   useLayoutEffect(() => {
     end.current?.scrollIntoView({ block: "end" })
@@ -48,8 +84,13 @@ export default function Chat({ id }) {
     setTurns((current) => [...current, turn])
     setBusy(true)
     try {
-      const result = await api.ask(id, { question, top_k: TOP_K })
+      const result = await api.ask(id, { question, top_k: TOP_K, conversation_id: chatId || undefined })
       update(turn.id, { status: "done", result })
+      if (result.conversation_id) {
+        setChatId(result.conversation_id)
+        localStorage.setItem(rememberKey(id), result.conversation_id)
+        refreshChats()
+      }
     } catch (err) {
       update(turn.id, { status: "error", error: err.message })
     } finally {
@@ -61,9 +102,32 @@ export default function Chat({ id }) {
     setTurns((current) => current.map((turn) => (turn.id === turnId ? { ...turn, ...changes } : turn)))
   }
 
-  function clear() {
+  function newChat() {
+    setChatId(null)
     setTurns([])
     setSelected(null)
+    setHistory(false)
+    localStorage.setItem(rememberKey(id), "new")
+  }
+
+  async function removeChat(chat) {
+    if (!window.confirm(`Delete this chat? ${chat.title}`)) return
+    try {
+      await api.deleteConversation(chat.id)
+      if (chat.id === chatId) newChat()
+      refreshChats()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  async function switchChat(chat) {
+    setHistory(false)
+    try {
+      await openChat(chat.id)
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   if (error && !kb) {
@@ -75,7 +139,7 @@ export default function Chat({ id }) {
       </main>
     )
   }
-  if (!kb) return <main className="chat" />
+  if (!kb || loading) return <main className="chat" />
 
   const open = selected ? turns.find((turn) => turn.id === selected.turnId) : null
 
@@ -90,8 +154,35 @@ export default function Chat({ id }) {
             </p>
           </div>
           <div className="row">
+            {chats.length ? (
+              <div className="history-wrap">
+                <button type="button" className="ghost" onClick={() => setHistory(!history)} aria-expanded={history}>
+                  <Icon name="history" /> History
+                </button>
+                {history ? (
+                  <>
+                    <div className="history-backdrop" onClick={() => setHistory(false)} />
+                    <ul className="history" aria-label="Saved chats">
+                      {chats.map((chat) => (
+                        <li key={chat.id} className={chat.id === chatId ? "current" : ""}>
+                          <button type="button" className="open" onClick={() => switchChat(chat)}>
+                            <span className="title">{chat.title}</span>
+                            <small>
+                              {when(chat.updated_at)} · {chat.turns} {chat.turns === 1 ? "question" : "questions"}
+                            </small>
+                          </button>
+                          <button type="button" className="ghost icon" aria-label={`Delete chat: ${chat.title}`} onClick={() => removeChat(chat)}>
+                            <Icon name="trash" size={14} />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+              </div>
+            ) : null}
             {turns.length ? (
-              <button type="button" className="ghost" onClick={clear}>
+              <button type="button" className="ghost" onClick={newChat}>
                 New chat
               </button>
             ) : null}
@@ -272,8 +363,10 @@ function Turn({ turn, kbId, selected, onSelect }) {
           <Provenance result={result} />
           {result.interaction_id ? (
             <div className="review">
-              <Feedback interactionId={result.interaction_id} />
-              {result.mode === "llm" ? <Scores interactionId={result.interaction_id} auto={result.scoring} /> : null}
+              <Feedback interactionId={result.interaction_id} initial={turn.interaction} />
+              {result.mode === "llm" ? (
+                <Scores interactionId={result.interaction_id} auto={result.scoring} initial={turn.interaction} />
+              ) : null}
             </div>
           ) : null}
         </div>

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import audit, db, google_drive, judge, model_settings, models, vectors
+from backend import audit, chats, db, google_drive, judge, model_settings, models, vectors
 from backend.chunking import chunk_text
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
@@ -184,7 +184,7 @@ def search(name_or_id: str, question: str, top_k: int = 5) -> dict:
     return {"knowledge_base": _brief(current), "citations": hits}
 
 
-def ask(name_or_id: str, question: str, top_k: int = 5, source: str = "api") -> dict:
+def ask(name_or_id: str, question: str, top_k: int = 5, source: str = "api", conversation_id: str = "") -> dict:
     """Answer from retrieved passages.
 
     With an LLM configured, the model must use those passages. Without one, the
@@ -195,6 +195,8 @@ def ask(name_or_id: str, question: str, top_k: int = 5, source: str = "api") -> 
     question = question.strip()
     if not question:
         raise BadRequest("Enter a question.")
+    if conversation_id:
+        chats.check(current["id"], conversation_id)
     cfg = model_settings.load()
     brief = _brief(current)
     if current["document_count"] == 0:
@@ -218,11 +220,18 @@ def ask(name_or_id: str, question: str, top_k: int = 5, source: str = "api") -> 
         "elapsed_ms": int((time.monotonic() - started) * 1000),
         "citations": hits,
     }
-    result["interaction_id"] = _audit(result, current, question, cfg, _top_k(top_k), source)
+    if source == "ui" and not conversation_id:
+        conversation_id = chats.start(current["id"], question)
+    result["conversation_id"] = conversation_id or None
+    result["interaction_id"] = _audit(result, current, question, cfg, _top_k(top_k), source, conversation_id)
+    if conversation_id:
+        chats.touch(conversation_id)
     return result
 
 
-def _audit(result: dict, current: dict, question: str, cfg: dict, top_k: int, source: str) -> str | None:
+def _audit(
+    result: dict, current: dict, question: str, cfg: dict, top_k: int, source: str, conversation_id: str = ""
+) -> str | None:
     """Log the answer for review. A logging failure must never cost the user their answer."""
     try:
         interaction_id = audit.record(
@@ -244,6 +253,7 @@ def _audit(result: dict, current: dict, question: str, cfg: dict, top_k: int, so
                 "chunk_overlap": current["chunk_overlap"],
                 "nn_algorithm": current["nn_algorithm"],
                 "elapsed_ms": result["elapsed_ms"],
+                "conversation_id": conversation_id or None,
                 "citations": result["citations"],
             }
         )

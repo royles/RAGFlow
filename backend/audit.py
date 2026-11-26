@@ -25,7 +25,7 @@ _LATEST = """
 _LATEST_REASON = "(SELECT reason FROM feedback f WHERE f.interaction_id = i.id ORDER BY f.id DESC LIMIT 1)"
 _LATEST_COMMENT = "(SELECT comment FROM feedback f WHERE f.interaction_id = i.id ORDER BY f.id DESC LIMIT 1)"
 _SELECT = f"""
-    SELECT i.*, {_LATEST} AS latest_rating, {_LATEST_REASON} AS latest_reason, {_LATEST_COMMENT} AS latest_comment
+    SELECT i.*, i.rowid AS seq, {_LATEST} AS latest_rating, {_LATEST_REASON} AS latest_reason, {_LATEST_COMMENT} AS latest_comment
     FROM interactions i
 """
 
@@ -112,7 +112,7 @@ def list_items(
     where, params = _filters(kb_id, rating, scored)
     with db.connection() as conn:
         rows = conn.execute(
-            f"SELECT * FROM ({_SELECT}) i {where} ORDER BY created_at DESC, id LIMIT ? OFFSET ?",
+            f"SELECT * FROM ({_SELECT}) i {where} ORDER BY created_at DESC, seq DESC LIMIT ? OFFSET ?",
             (*params, limit, max(0, int(offset))),
         ).fetchall()
         total = conn.execute(f"SELECT COUNT(*) FROM ({_SELECT}) i {where}", params).fetchone()[0]
@@ -153,7 +153,7 @@ def export(kb_id: str = "") -> Iterator[dict[str, Any]]:
     """Every matching answer in full, oldest first, with its feedback events."""
     where, params = _filters(kb_id, "", "")
     with db.connection() as conn:
-        rows = conn.execute(f"SELECT * FROM ({_SELECT}) i {where} ORDER BY created_at, id", params).fetchall()
+        rows = conn.execute(f"SELECT * FROM ({_SELECT}) i {where} ORDER BY created_at, seq", params).fetchall()
         events: dict[str, list[dict]] = {}
         for event in conn.execute(
             "SELECT interaction_id, rating, reason, comment, created_at FROM feedback ORDER BY id"
@@ -173,7 +173,13 @@ def purge(days: int) -> int:
         return 0
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).replace(microsecond=0).isoformat()
     with db.connection() as conn:
-        return conn.execute("DELETE FROM interactions WHERE created_at < ?", (cutoff,)).rowcount
+        removed = conn.execute("DELETE FROM interactions WHERE created_at < ?", (cutoff,)).rowcount
+        if removed:
+            conn.execute(
+                "DELETE FROM conversations WHERE id NOT IN "
+                "(SELECT conversation_id FROM interactions WHERE conversation_id IS NOT NULL)"
+            )
+        return removed
 
 
 def _filters(kb_id: str, rating: str, scored: str) -> tuple[str, tuple]:
@@ -197,6 +203,7 @@ def _filters(kb_id: str, rating: str, scored: str) -> tuple[str, tuple]:
 
 def _full(row) -> dict[str, Any]:
     item = dict(row)
+    item.pop("seq", None)
     item["citations"] = json.loads(item["citations"])
     item["faithfulness_claims"] = json.loads(item["faithfulness_claims"])
     item["rating"] = None if item["latest_rating"] in (None, "none") else item["latest_rating"]

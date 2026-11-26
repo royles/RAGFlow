@@ -77,6 +77,9 @@ export const api = {
     request(`/api/knowledge-bases/${id}/documents/${documentId}`, { method: "DELETE" }),
   ask: (id, payload) =>
     request(`/api/knowledge-bases/${id}/ask`, { method: "POST", body: JSON.stringify({ source: "ui", ...payload }) }),
+  listConversations: (kbId) => request(`/api/knowledge-bases/${kbId}/conversations`),
+  getConversation: (id) => request(`/api/conversations/${id}`),
+  deleteConversation: (id) => request(`/api/conversations/${id}`, { method: "DELETE" }),
   getInteraction: (id) => request(`/api/interactions/${id}`),
   rate: (id, payload) =>
     request(`/api/interactions/${id}/feedback`, { method: "POST", body: JSON.stringify(payload) }),

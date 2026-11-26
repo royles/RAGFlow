@@ -13,7 +13,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from backend import accesslog, advanced, audit, chunk_preview, google_drive, judge, model_settings, model_test, service
+from backend import accesslog, advanced, audit, chats, chunk_preview, google_drive, judge, model_settings, model_test, service
 from backend.catalog import public_catalog
 from backend.errors import BadRequest, NotFound
 from backend.mcp_server import mcp, transport_security
@@ -240,7 +240,25 @@ def search(kb_id: str, payload: dict) -> dict:
 @app.post("/api/knowledge-bases/{kb_id}/ask")
 def ask(kb_id: str, payload: dict) -> dict:
     source = "ui" if payload.get("source") == "ui" else "api"
-    return _call(lambda: service.ask(kb_id, str(payload.get("question") or ""), payload.get("top_k", 5), source))
+    conversation_id = str(payload.get("conversation_id") or "")
+    return _call(
+        lambda: service.ask(kb_id, str(payload.get("question") or ""), payload.get("top_k", 5), source, conversation_id)
+    )
+
+
+@app.get("/api/knowledge-bases/{kb_id}/conversations")
+def list_conversations(kb_id: str) -> dict:
+    return _call(lambda: {"conversations": chats.list_for_kb(service.get_knowledge_base(kb_id)["id"])})
+
+
+@app.get("/api/conversations/{conversation_id}")
+def get_conversation(conversation_id: str) -> dict:
+    return _call(lambda: chats.get(conversation_id))
+
+
+@app.delete("/api/conversations/{conversation_id}", status_code=204)
+def delete_conversation(conversation_id: str) -> None:
+    _call(lambda: chats.delete(conversation_id))
 
 
 @app.get("/api/interactions/{interaction_id}")

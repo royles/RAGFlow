@@ -176,14 +176,14 @@ export function ScoreChips({ item }) {
 
 // Scores arrive after the answer, so this polls until the judge has finished.
 // With automatic scoring off, a button scores the answer on request.
-export function Scores({ interactionId, auto = true }) {
-  const [item, setItem] = useState(null)
+export function Scores({ interactionId, auto = true, initial = null }) {
+  const [item, setItem] = useState(initial && (initial.judged_at || initial.judge_error) ? initial : null)
   const [gaveUp, setGaveUp] = useState(false)
   const [requested, setRequested] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
-    if (!auto) return undefined
+    if (!auto || item) return undefined
     let active = true
     let tries = 0
     async function poll() {
