@@ -3,13 +3,14 @@ import { api } from "./api"
 import { Icon } from "./components"
 import Agents from "./pages/Agents"
 import Chat from "./pages/Chat"
+import Google from "./pages/Google"
 import Manage from "./pages/Manage"
 import Models from "./pages/Models"
 import NewKnowledgeBase from "./pages/NewKnowledgeBase"
 import Quality from "./pages/Quality"
 
 function readRoute() {
-  const hash = window.location.hash.replace(/^#/, "") || "/"
+  const hash = (window.location.hash.replace(/^#/, "") || "/").split("?")[0]
   const manage = hash.match(/^\/kb\/([^/]+)\/manage$/)
   if (manage) return { name: "manage", id: decodeURIComponent(manage[1]) }
   const chat = hash.match(/^\/kb\/([^/]+)$/)
@@ -18,6 +19,7 @@ function readRoute() {
   if (hash === "/models") return { name: "models" }
   if (hash === "/agents") return { name: "agents" }
   if (hash === "/quality") return { name: "quality" }
+  if (hash === "/google") return { name: "google" }
   return { name: "home" }
 }
 
@@ -82,6 +84,10 @@ export default function App() {
             <Icon name="cpu" size={15} />
             <span>Models</span>
           </a>
+          <a href="#/google" aria-current={route.name === "google" ? "page" : undefined}>
+            <Icon name="drive" size={15} />
+            <span>Google Drive</span>
+          </a>
           <a href="#/agents" aria-current={route.name === "agents" ? "page" : undefined}>
             <Icon name="plug" size={15} />
             <span>Agents (MCP)</span>
@@ -108,6 +114,11 @@ export default function App() {
         {route.name === "quality" ? (
           <div className="page">
             <Quality bases={bases} />
+          </div>
+        ) : null}
+        {route.name === "google" ? (
+          <div className="page">
+            <Google />
           </div>
         ) : null}
         {route.name === "agents" ? (

@@ -7,12 +7,13 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from backend import accesslog, audit, chunk_preview, judge, model_settings, model_test, service
+from backend import accesslog, audit, chunk_preview, google_drive, judge, model_settings, model_test, service
 from backend.catalog import public_catalog
 from backend.errors import BadRequest, NotFound
 from backend.mcp_server import mcp, transport_security
@@ -160,6 +161,54 @@ async def upload_document(kb_id: str, file: UploadFile = File(...)) -> dict:
     return await run_in_threadpool(
         lambda: _call(lambda: service.add_document(kb_id, file.filename or "document.txt", data))
     )
+
+
+@app.post("/api/knowledge-bases/{kb_id}/documents/google-drive", status_code=201)
+async def import_drive_file(kb_id: str, payload: dict) -> dict:
+    return await run_in_threadpool(
+        lambda: _call(lambda: service.add_drive_file(kb_id, str(payload.get("file_id") or "")))
+    )
+
+
+@app.get("/api/google")
+def google_status() -> dict:
+    return google_drive.public()
+
+
+@app.put("/api/google")
+def google_save(payload: dict) -> dict:
+    return _call(lambda: google_drive.save_credentials(payload))
+
+
+@app.post("/api/google/connect")
+def google_connect(payload: dict) -> dict:
+    return _call(lambda: {"url": google_drive.begin(str(payload.get("redirect_uri") or ""))})
+
+
+@app.get("/api/google/callback")
+def google_callback(code: str = "", state: str = "", error: str = "") -> RedirectResponse:
+    """Google sends the browser back here. The result is shown on the Google Drive page."""
+    if error:
+        message = "Google sign-in was cancelled." if error == "access_denied" else f"Google sign-in failed: {error}"
+    elif not code:
+        message = "Google did not send a sign-in code."
+    else:
+        try:
+            google_drive.finish(code, state)
+            return RedirectResponse("/#/google?connected=1", status_code=303)
+        except BadRequest as exc:
+            message = str(exc)
+    return RedirectResponse(f"/#/google?error={quote(message)}", status_code=303)
+
+
+@app.post("/api/google/disconnect")
+def google_disconnect() -> dict:
+    return _call(google_drive.disconnect)
+
+
+@app.get("/api/google/files")
+async def google_files(parent: str = "", q: str = "", page_token: str = "") -> dict:
+    return await run_in_threadpool(lambda: _call(lambda: google_drive.list_files(parent, q, page_token)))
 
 
 @app.post("/api/knowledge-bases/{kb_id}/sample", status_code=201)

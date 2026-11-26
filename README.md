@@ -42,6 +42,21 @@ The default view is a clean chat. Pick a knowledge base in the left panel and as
 
 Everything else is out of the way: **Manage** (per knowledge base) holds documents, chunking, and the chunk preview; **New knowledge base**, **Quality**, **Models**, and **Agents (MCP)** are in the left panel. The UI follows the system light or dark setting.
 
+## Google Drive
+
+Connect Google Drive once, then pick files from it in any knowledge base: **Manage**, **Google Drive**. The picker browses My Drive and Shared with me, searches by name, and imports several files at once through the same progress tracker as uploads. Text, Markdown, CSV, PDF and DOCX files are downloaded as they are. Google Docs and Slides are exported as text, and Sheets as CSV.
+
+Access is **read-only**: the only scope requested is `https://www.googleapis.com/auth/drive.readonly`, so RAGFlow can read files but never change or delete them. Sign-in is the OAuth 2.0 authorization-code flow with PKCE and a single-use `state`. The refresh token is kept in `data/google_drive.json` (mode 0600) and is never sent to the browser. **Disconnect** on the Google Drive page revokes the grant.
+
+Setup, on the Google Drive page (`#/google`):
+
+1. In Google Cloud Console enable the **Google Drive API** and create an **OAuth client ID** of type **Web application**.
+2. Add the redirect URI shown on the page as an **Authorized redirect URI**. It is the app's own address plus `/api/google/callback`, for example `https://ragflow.<your-domain>/api/google/callback` on Cloudera AI. Google requires HTTPS except for loopback addresses.
+3. While the OAuth consent screen is in testing, add the accounts that will sign in as test users. `drive.readonly` is a restricted scope, so a public app needs Google's verification, whereas an Internal app in a Workspace organisation does not.
+4. Paste the client ID and secret on the page, save, and press **Connect Google Drive**. `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` work too.
+
+One Google account is connected for the whole app, so anyone who can open RAGFlow can import from it. Restrict who can open the application in Cloudera AI accordingly. The server needs outbound access to `accounts.google.com`, `oauth2.googleapis.com` and `www.googleapis.com`.
+
 ## Quality: feedback, audit, and scores
 
 Under each answer, **thumbs up/down** record a rating. A thumbs-down offers an optional reason (incorrect, incomplete, wrong sources, unclear, other) and a comment. Votes never change retrieval by themselves. They label real answers for people to review.

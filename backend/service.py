@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import audit, db, judge, model_settings, models, vectors
+from backend import audit, db, google_drive, judge, model_settings, models, vectors
 from backend.chunking import chunk_text
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
@@ -154,6 +154,13 @@ def add_document(kb_id: str, filename: str, data: bytes) -> dict:
         vectors.delete_document(current["collection"], document_id)
         raise
     return row
+
+
+def add_drive_file(kb_id: str, file_id: str) -> dict:
+    """Download one Google Drive file and index it like an upload."""
+    _require(kb_id)
+    filename, data = google_drive.fetch(file_id)
+    return add_document(kb_id, filename, data)
 
 
 def add_sample(kb_id: str) -> dict:

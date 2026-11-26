@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import DrivePicker from "../DrivePicker"
 import { api } from "../api"
 import { Field, Icon } from "../components"
 import ChunkPreview from "./ChunkPreview"
@@ -12,6 +13,7 @@ export default function Manage({ id, onChange }) {
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState("")
   const [uploads, setUploads] = useState([])
+  const [picking, setPicking] = useState(false)
   const [dragging, setDragging] = useState(false)
 
   async function reload() {
@@ -92,9 +94,9 @@ export default function Manage({ id, onChange }) {
   }
 
   // A few files go up and index at once. A bad file fails on its own row.
-  async function uploadFiles(files) {
-    if (!files.length) return
-    const batch = files.map((file) => ({ key: ++uploadKey, file, name: file.name, size: file.size, status: "queued", sent: 0 }))
+  async function runBatch(items) {
+    if (!items.length) return
+    const batch = items.map((item) => ({ ...item, key: ++uploadKey, status: "queued", sent: 0 }))
     setUploads(batch)
     setBusy("upload")
     setError("")
@@ -105,7 +107,7 @@ export default function Manage({ id, onChange }) {
         const item = batch[next++]
         patchUpload(item.key, { status: "uploading" })
         try {
-          const row = await api.uploadDocument(id, item.file, (sent) =>
+          const row = await item.task((sent) =>
             patchUpload(item.key, { sent, status: sent >= 1 ? "indexing" : "uploading" }),
           )
           patchUpload(item.key, { status: "done", sent: 1, chunks: row.chunk_count })
@@ -117,6 +119,22 @@ export default function Manage({ id, onChange }) {
     }
     await Promise.all(Array.from({ length: Math.min(UPLOAD_PARALLEL, batch.length) }, worker))
     setBusy("")
+  }
+
+  const uploadFiles = (files) =>
+    runBatch(files.map((file) => ({ name: file.name, task: (progress) => api.uploadDocument(id, file, progress) })))
+
+  const importFromDrive = (files) => {
+    setPicking(false)
+    runBatch(
+      files.map((file) => ({
+        name: file.name,
+        task: (progress) => {
+          progress(1)
+          return api.importDriveFile(id, file.id)
+        },
+      })),
+    )
   }
 
   const onUpload = (event) => {
@@ -179,11 +197,15 @@ export default function Manage({ id, onChange }) {
             <input type="file" multiple accept=".txt,.md,.markdown,.csv,.pdf,.docx" onChange={onUpload} disabled={busy === "upload"} />
             {busy === "upload" ? "Uploading…" : "Upload"}
           </label>
+          <button type="button" className="secondary" onClick={() => setPicking(true)} disabled={busy === "upload"}>
+            <Icon name="drive" size={15} /> Google Drive
+          </button>
           <button type="button" className="secondary" onClick={onSample} disabled={busy === "sample"}>
             {busy === "sample" ? "Indexing…" : "Load sample"}
           </button>
         </div>
         <p className="hint">Select or drop several files at once. Text, Markdown, CSV, PDF, and DOCX. New files use the chunk size saved below.</p>
+        {picking ? <DrivePicker onClose={() => setPicking(false)} onImport={importFromDrive} /> : null}
         {uploads.length ? <UploadTracker uploads={uploads} busy={busy === "upload"} onClear={() => setUploads([])} /> : null}
         {documents.length === 0 ? (
           <p className="empty">Nothing uploaded yet.</p>

@@ -62,6 +62,14 @@ export const api = {
       }
       xhr.send(body)
     }),
+  google: () => request("/api/google"),
+  saveGoogle: (payload) => request("/api/google", { method: "PUT", body: JSON.stringify(payload) }),
+  googleConnect: (redirectUri) =>
+    request("/api/google/connect", { method: "POST", body: JSON.stringify({ redirect_uri: redirectUri }) }),
+  googleDisconnect: () => request("/api/google/disconnect", { method: "POST" }),
+  googleFiles: (params) => request(`/api/google/files?${new URLSearchParams(params)}`),
+  importDriveFile: (id, fileId) =>
+    request(`/api/knowledge-bases/${id}/documents/google-drive`, { method: "POST", body: JSON.stringify({ file_id: fileId }) }),
   loadSample: (id) => request(`/api/knowledge-bases/${id}/sample`, { method: "POST" }),
   deleteDocument: (id, documentId) =>
     request(`/api/knowledge-bases/${id}/documents/${documentId}`, { method: "DELETE" }),
