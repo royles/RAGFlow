@@ -34,7 +34,9 @@ async def chat(request: Request):
         text = judge_replies.get("relevance", '{"score": 5, "reason": "Directly answers it."}')
     elif "follow-up questions" in prompt:
         text = judge_replies.get(
-            "followups", '["What else is in the handbook?", "Who owns the Dublin warehouse?", "When does it open?", "Is there a fourth one?"]'
+            "followups",
+            '[{"question": "What else is in the handbook?", "kind": "deeper"}, {"question": "Which warehouse region do you mean?", "kind": "clarify"}, '
+            '{"question": "How does Dublin compare with Cork?", "kind": "related"}, {"question": "Is there a fourth one?", "kind": "deeper"}]',
         )
     else:
         text = "ready" if "single word" in prompt else "The fake model answers from passage [1]."

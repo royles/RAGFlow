@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import audit, chats, db, google_drive, judge, model_settings, models, vectors
+from backend import audit, chats, db, followups, google_drive, judge, model_settings, models, vectors
 from backend.chunking import chunk_text
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
@@ -261,7 +261,8 @@ def _audit(
         log.exception("Could not write the audit record")
         return None
     result["scoring"] = result["mode"] == "llm" and judge.enabled(cfg)
-    if result["scoring"]:
+    result["suggesting"] = result["mode"] == "llm" and followups.enabled()
+    if result["scoring"] or result["suggesting"]:
         judge.schedule(interaction_id)
     return interaction_id
 

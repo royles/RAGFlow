@@ -53,7 +53,7 @@ SETTINGS = [
         "type": "int",
         "max": 5,
         "default": 3,
-        "help": "How many follow-up questions to suggest under the latest answer. 0 turns suggestions off. Each set costs one extra LLM call, made after the answer is shown.",
+        "help": "How many follow-up questions to suggest under the latest answer: deeper detail, a sharper version of a vague question, and related topics from nearby sections. 0 turns suggestions off. Each set costs one extra LLM call, made after the answer is shown.",
     },
     {
         "key": "audit_retention_days",

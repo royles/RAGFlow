@@ -297,30 +297,49 @@ function Composer({ onSend, busy }) {
   )
 }
 
-// Suggested next questions. They are made after the answer, so a failure only hides them.
-function Followups({ interactionId, initial, onPick }) {
+const KIND_LABELS = { deeper: "Go deeper", clarify: "Be specific", related: "Related" }
+const KIND_HINTS = {
+  deeper: "More detail from the same passages",
+  clarify: "A sharper version of the question, for when it was vague or the sources were incomplete",
+  related: "A nearby topic from the same documents",
+}
+
+// Suggested next questions. They arrive with the background review of the answer, so
+// this waits for them. A failure or a timeout only hides them.
+function Followups({ interactionId, initial, pending, onPick }) {
   const [questions, setQuestions] = useState(Array.isArray(initial) ? initial : null)
+  const [gaveUp, setGaveUp] = useState(false)
 
   useEffect(() => {
-    if (questions) return undefined
+    if (questions || !pending) return undefined
     let active = true
-    api
-      .followups(interactionId)
-      .then((result) => active && setQuestions(result.questions))
-      .catch(() => active && setQuestions([]))
+    let tries = 0
+    async function poll() {
+      try {
+        const next = await api.getInteraction(interactionId)
+        if (!active) return
+        if (Array.isArray(next.followups)) return setQuestions(next.followups)
+      } catch {
+        // keep trying
+      }
+      if (++tries >= 60) return active && setGaveUp(true)
+      setTimeout(poll, 1500)
+    }
+    poll()
     return () => {
       active = false
     }
-  }, [interactionId])
+  }, [interactionId, pending])
 
-  if (!questions) return <p className="followups muted">Thinking of follow-up questions…</p>
+  if (!questions) return pending && !gaveUp ? <p className="followups muted">Thinking of follow-up questions…</p> : null
   if (!questions.length) return null
   return (
     <div className="followups">
       <span className="followups-label">Follow-up questions</span>
-      {questions.map((question) => (
-        <button type="button" key={question} className="followup" onClick={() => onPick(question)}>
-          {question}
+      {questions.map((item) => (
+        <button type="button" key={item.question} className="followup" onClick={() => onPick(item.question)} title={KIND_HINTS[item.kind]}>
+          <small>{KIND_LABELS[item.kind] || KIND_LABELS.deeper}</small>
+          {item.question}
         </button>
       ))}
     </div>
@@ -401,7 +420,12 @@ function Turn({ turn, kbId, selected, onSelect, onFollowup }) {
             </div>
           ) : null}
           {onFollowup && result.mode === "llm" && result.interaction_id ? (
-            <Followups interactionId={result.interaction_id} initial={turn.interaction?.followups} onPick={onFollowup} />
+            <Followups
+              interactionId={result.interaction_id}
+              initial={turn.interaction?.followups}
+              pending={result.suggesting}
+              onPick={onFollowup}
+            />
           ) : null}
         </div>
       ) : null}

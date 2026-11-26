@@ -13,7 +13,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from backend import audit, model_settings, models
+from backend import audit, followups, model_settings, models
 from backend.errors import BadRequest
 
 log = logging.getLogger("ragflow")
@@ -100,7 +100,7 @@ def score_interaction(interaction_id: str) -> dict:
 
 
 def schedule(interaction_id: str) -> None:
-    """Score in the background so the answer is never delayed by the judge."""
+    """Review in the background so the answer is never delayed by the judge."""
     _pool.submit(_run, interaction_id)
 
 
@@ -121,11 +121,16 @@ def check(cfg: dict) -> str:
 
 
 def _run(interaction_id: str) -> None:
+    """The background review of one answer: follow-up suggestions, then scores when a judge is set."""
+    followups.generate(interaction_id)
+    cfg = model_settings.load()
+    if not enabled(cfg):
+        return
     try:
         score_interaction(interaction_id)
     except Exception as exc:
         log.exception("Could not score answer %s", interaction_id)
-        audit.save_scores(interaction_id, {"judge_error": _message(exc, model_settings.load())})
+        audit.save_scores(interaction_id, {"judge_error": _message(exc, cfg)})
 
 
 def _faithfulness(cfg: dict, answer: str, passages: list[str]) -> dict:

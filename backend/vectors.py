@@ -14,6 +14,7 @@ from qdrant_client.models import (
     FieldCondition,
     Filter,
     FilterSelector,
+    MatchAny,
     MatchValue,
     PointStruct,
     SearchParams,
@@ -90,6 +91,31 @@ def search(collection: str, vector: list[float], limit: int, nn_algorithm: str) 
             }
         )
     return hits
+
+
+def neighbours(collection: str, wanted: dict[str, list[int]]) -> list[dict]:
+    """Chunks by document and index, such as the sections next to a retrieved one."""
+    found = []
+    for document_id, indexes in wanted.items():
+        condition = Filter(
+            must=[
+                FieldCondition(key="document_id", match=MatchValue(value=document_id)),
+                FieldCondition(key="chunk_index", match=MatchAny(any=indexes)),
+            ]
+        )
+        with _lock:
+            points, _ = _qdrant().scroll(collection_name=collection, scroll_filter=condition, limit=len(indexes), with_payload=True)
+        for point in points:
+            payload = point.payload or {}
+            found.append(
+                {
+                    "document_id": document_id,
+                    "filename": payload.get("filename", ""),
+                    "chunk_index": payload.get("chunk_index", 0),
+                    "text": payload.get("text", ""),
+                }
+            )
+    return sorted(found, key=lambda item: (item["filename"], item["chunk_index"]))
 
 
 def delete_document(collection: str, document_id: str) -> None:

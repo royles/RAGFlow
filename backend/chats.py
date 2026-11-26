@@ -10,7 +10,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 
-from backend import audit, db
+from backend import audit, db, followups
 from backend.errors import NotFound
 
 TITLE_LENGTH = 80
@@ -105,6 +105,12 @@ def _turn(item: dict) -> dict:
         and not item["judge_error"]
         and time.time() - _epoch(item["created_at"]) < SCORING_WINDOW
     )
+    suggesting = (
+        item["mode"] == "llm"
+        and item["followups"] is None
+        and followups.enabled()
+        and time.time() - _epoch(item["created_at"]) < SCORING_WINDOW
+    )
     return {
         "id": item["id"],
         "question": item["question"],
@@ -119,6 +125,7 @@ def _turn(item: dict) -> dict:
             "citations": item["citations"],
             "interaction_id": item["id"],
             "scoring": pending,
+            "suggesting": suggesting,
         },
         "interaction": {
             key: item[key]

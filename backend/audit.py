@@ -100,7 +100,7 @@ def save_scores(interaction_id: str, scores: dict[str, Any]) -> None:
         conn.execute(f"UPDATE interactions SET {assignments} WHERE id = ?", (*fields.values(), interaction_id))
 
 
-def save_followups(interaction_id: str, questions: list[str]) -> None:
+def save_followups(interaction_id: str, questions: list[dict[str, str]]) -> None:
     with db.connection() as conn:
         conn.execute("UPDATE interactions SET followups = ? WHERE id = ?", (json.dumps(questions), interaction_id))
 
@@ -206,11 +206,15 @@ def _filters(kb_id: str, rating: str, scored: str) -> tuple[str, tuple]:
     return ("WHERE " + " AND ".join(clauses) if clauses else ""), tuple(params)
 
 
+def _suggestions(raw: str) -> list[dict[str, str]]:
+    return [{"question": s, "kind": "deeper"} if isinstance(s, str) else s for s in json.loads(raw)]
+
+
 def _full(row) -> dict[str, Any]:
     item = dict(row)
     item.pop("seq", None)
     item["citations"] = json.loads(item["citations"])
-    item["followups"] = None if item.get("followups") is None else json.loads(item["followups"])
+    item["followups"] = None if item.get("followups") is None else _suggestions(item["followups"])
     item["faithfulness_claims"] = json.loads(item["faithfulness_claims"])
     item["rating"] = None if item["latest_rating"] in (None, "none") else item["latest_rating"]
     item["rating_reason"] = item.pop("latest_reason") or ""
