@@ -22,12 +22,12 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
+      <aside className="sidebar">
         <a className="brand" href="#/">
           RAGFlow
         </a>
         <p>Knowledge bases for Cloudera AI</p>
-        <nav>
+        <nav aria-label="Main">
           <a href="#/" aria-current={route.name !== "models" ? "page" : undefined}>
             Knowledge bases
           </a>
@@ -35,10 +35,12 @@ export default function App() {
             Models
           </a>
         </nav>
-      </header>
-      {route.name === "kb" ? <KnowledgeBase key={route.id} id={route.id} /> : null}
-      {route.name === "models" ? <Models /> : null}
-      {route.name === "library" ? <Library /> : null}
+      </aside>
+      <div className="content">
+        {route.name === "kb" ? <KnowledgeBase key={route.id} id={route.id} /> : null}
+        {route.name === "models" ? <Models /> : null}
+        {route.name === "library" ? <Library /> : null}
+      </div>
     </div>
   )
 }
