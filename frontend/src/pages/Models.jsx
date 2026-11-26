@@ -160,8 +160,8 @@ export default function Models() {
         <section className="panel">
           <h2>AWS Bedrock</h2>
           <Field
-            label="Region"
-            hint={`Blank uses ${saved.bedrock.effective_region} from the environment or the default.`}
+            label="Default region"
+            hint={`Used by any Bedrock model below without its own region. Blank uses ${saved.bedrock.effective_region} from the environment or the default.`}
           >
             <input value={draft.region} onChange={(event) => setDraft({ ...draft, region: event.target.value })} placeholder={saved.bedrock.effective_region} />
           </Field>
@@ -234,10 +234,12 @@ export default function Models() {
           role={role}
           catalog={catalog}
           value={draft[role.id]}
+          fallbackRegion={draft.region || saved.bedrock.effective_region}
           fallbackUrl={draft.base_url || saved.openai.effective_base_url || "https://api.openai.com/v1"}
           result={results[role.id]}
           testing={testing === role.id}
           onBaseUrl={(baseUrl) => setRole(role.id, { base_url: baseUrl })}
+          onRegion={(region) => setRole(role.id, { region })}
           onProvider={(provider) => changeProvider(role.id, provider)}
           onModel={(model) => changeModel(role.id, model)}
           onDimensions={(dimensions) => setRole(role.id, { dimensions })}
@@ -286,7 +288,7 @@ function Secret({ label, name, isSet, value, onChange, cleared, onClear }) {
   )
 }
 
-function RoleCard({ role, catalog, value, fallbackUrl, result, testing, onProvider, onBaseUrl, onModel, onDimensions, onTest }) {
+function RoleCard({ role, catalog, value, fallbackRegion, fallbackUrl, result, testing, onProvider, onBaseUrl, onRegion, onModel, onDimensions, onTest }) {
   const providers = catalog.providers[role.id]
   const suggestions = catalog.model_suggestions[role.id]?.[value.provider] || []
   const fixed = value.provider === "none" || value.provider === "local"
@@ -322,6 +324,20 @@ function RoleCard({ role, catalog, value, fallbackUrl, result, testing, onProvid
           </datalist>
         </Field>
       </div>
+      {value.provider === "bedrock" ? (
+        <Field
+          label="AWS region"
+          hint={
+            value.region
+              ? "This model is called in this region."
+              : `Blank uses the Bedrock region above: ${fallbackRegion}.${
+                  role.id === "rerank" ? " Re-rank models are only offered in some regions, such as us-west-2." : ""
+                }`
+          }
+        >
+          <input value={value.region || ""} onChange={(event) => onRegion(event.target.value)} placeholder={fallbackRegion} />
+        </Field>
+      ) : null}
       {value.provider === "openai" ? (
         <Field
           label="Base URL"

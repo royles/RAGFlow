@@ -22,7 +22,7 @@ def embed(provider: str, model: str, dim: int, texts: list[str], purpose: str, c
         return [local_embed(text) for text in texts]
     cfg = cfg or model_settings.load()
     if provider == "bedrock":
-        return bedrock.embed_texts(model_settings.bedrock_credentials(cfg), model, texts, dim, purpose)
+        return bedrock.embed_texts(model_settings.bedrock_credentials(cfg, "embedding"), model, texts, dim, purpose)
     if provider == "openai":
         return openai_compat.embed_texts(model_settings.openai_credentials(cfg, "embedding"), model, texts, dim, purpose)
     raise BadRequest(f"Unknown embedding provider {provider!r}.")

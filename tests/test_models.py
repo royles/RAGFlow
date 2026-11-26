@@ -107,6 +107,7 @@ class ModelApiTests(unittest.TestCase):
             {"bedrock": {"access_key_id": "AKIA"}},
             {"bedrock": {"region": "Not A Region"}},
             {"openai": {"base_url": "localhost:1234"}},
+            {"rerank": {"provider": "bedrock", "model": "amazon.rerank-v1:0", "region": "US West"}},
             {"llm": {"provider": "bedrock", "model": ""}},
             {"llm": {"provider": "magic", "model": "x"}},
             {"embedding": {"provider": "openai", "model": "m", "dimensions": 2}},
@@ -277,7 +278,13 @@ class BedrockTests(unittest.TestCase):
             real = boto3.client(service, region_name="us-east-1", aws_access_key_id="k", aws_secret_access_key="s")
             stub = Stubber(real)
             self.clients[service] = (real, stub)
-        patcher = mock.patch("backend.bedrock.client", side_effect=lambda service, creds: self.clients[service][0])
+        self.regions = []
+
+        def fake_client(service, creds):
+            self.regions.append((service, creds["region"]))
+            return self.clients[service][0]
+
+        patcher = mock.patch("backend.bedrock.client", side_effect=fake_client)
         patcher.start()
         self.addCleanup(patcher.stop)
 
@@ -349,6 +356,45 @@ class BedrockTests(unittest.TestCase):
         )
         result = self.run_role("rerank")
         self.assertTrue(result["ok"], result)
+
+    def test_rerank_can_use_its_own_region(self):
+        model_settings.save_update({"rerank": {"provider": "bedrock", "model": "amazon.rerank-v1:0", "region": "us-west-2"}})
+        self.stub("bedrock-agent-runtime").add_response(
+            "rerank",
+            {"results": [{"index": 1, "relevanceScore": 0.9}, {"index": 0, "relevanceScore": 0.1}]},
+            {
+                "queries": [{"type": "TEXT", "textQuery": {"text": model_test._QUERY}}],
+                "sources": [
+                    {"type": "INLINE", "inlineDocumentSource": {"type": "TEXT", "textDocument": {"text": text}}}
+                    for text in model_test._DOCUMENTS
+                ],
+                "rerankingConfiguration": {
+                    "type": "BEDROCK_RERANKING_MODEL",
+                    "bedrockRerankingConfiguration": {
+                        "modelConfiguration": {"modelArn": "arn:aws:bedrock:us-west-2::foundation-model/amazon.rerank-v1:0"},
+                        "numberOfResults": 2,
+                    },
+                },
+            },
+        )
+        self.assertTrue(self.run_role("rerank")["ok"])
+        self.assertEqual(self.regions, [("bedrock-agent-runtime", "us-west-2")])
+        public = model_settings.public(model_settings.load())
+        self.assertEqual(public["rerank"]["effective_region"], "us-west-2")
+        self.assertEqual(public["llm"]["effective_region"], "us-east-1")
+
+    def test_invalid_model_error_explains_the_region(self):
+        self.stub("bedrock-agent-runtime").add_client_error(
+            "rerank", "ValidationException", "The provided model identifier is invalid."
+        )
+        result = self.run_role("rerank")
+        self.assertFalse(result["ok"])
+        self.assertIn("The region used was us-east-1", result["detail"])
+        self.assertIn("us-west-2", result["detail"])
+
+    def test_other_errors_get_no_region_hint(self):
+        self.stub("bedrock-agent-runtime").add_client_error("rerank", "AccessDeniedException", "No access")
+        self.assertNotIn("region used", self.run_role("rerank")["detail"])
 
     def test_aws_errors_are_a_failed_test_not_a_crash(self):
         self.stub("bedrock-runtime").add_client_error("converse", "AccessDeniedException", "You do not have access")

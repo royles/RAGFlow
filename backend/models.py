@@ -7,7 +7,7 @@ from backend.errors import BadRequest
 def generate(cfg: dict, prompt: str) -> str:
     llm = cfg["llm"]
     if llm["provider"] == "bedrock":
-        return bedrock.converse(model_settings.bedrock_credentials(cfg), llm["model"], prompt)
+        return bedrock.converse(model_settings.bedrock_credentials(cfg, "llm"), llm["model"], prompt)
     if llm["provider"] == "openai":
         return openai_compat.chat(model_settings.openai_credentials(cfg, "llm"), llm["model"], prompt)
     raise BadRequest("No LLM is configured.")
@@ -17,7 +17,7 @@ def rerank_scores(cfg: dict, query: str, documents: list[str], top_n: int) -> li
     """(document index, score) pairs, best first, from the configured re-rank model."""
     section = cfg["rerank"]
     if section["provider"] == "bedrock":
-        ranked = bedrock.rerank(model_settings.bedrock_credentials(cfg), section["model"], query, documents, top_n)
+        ranked = bedrock.rerank(model_settings.bedrock_credentials(cfg, "rerank"), section["model"], query, documents, top_n)
     elif section["provider"] == "openai":
         ranked = openai_compat.rerank(model_settings.openai_credentials(cfg, "rerank"), section["model"], query, documents, top_n)
     else:

@@ -103,8 +103,19 @@ def rerank(creds: dict, model: str, query: str, documents: list[str], top_n: int
             },
         )
     except (BotoCoreError, ClientError) as exc:
-        raise BadRequest(f"Amazon Bedrock rejected the re-rank request: {exc}") from exc
+        raise BadRequest(f"Amazon Bedrock rejected the re-rank request: {exc}{_rerank_hint(exc, creds['region'])}") from exc
     return [(int(row["index"]), float(row["relevanceScore"])) for row in response["results"]]
+
+
+def _rerank_hint(exc: Exception, region: str) -> str:
+    """Re-rank models are offered in few regions, and a wrong region reports an invalid model id."""
+    if "model identifier is invalid" not in str(exc):
+        return ""
+    return (
+        f" The region used was {region}. Re-rank models are only offered in some regions "
+        "(for example us-west-2, ca-central-1, eu-central-1 and ap-northeast-1), and the model must be "
+        "enabled in your AWS account. Set a Region on the re-rank model card to use a different one."
+    )
 
 
 def _read_vector(payload: dict) -> list[float]:

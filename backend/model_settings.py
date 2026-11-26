@@ -31,9 +31,9 @@ LOCAL_DIM = 384
 DEFAULTS = {
     "bedrock": {"region": "", "access_key_id": "", "secret_access_key": "", "session_token": ""},
     "openai": {"base_url": "", "api_key": ""},
-    "llm": {"provider": "none", "model": "", "base_url": ""},
-    "embedding": {"provider": "local", "model": LOCAL_MODEL, "dimensions": LOCAL_DIM, "base_url": ""},
-    "rerank": {"provider": "none", "model": "", "base_url": ""},
+    "llm": {"provider": "none", "model": "", "base_url": "", "region": ""},
+    "embedding": {"provider": "local", "model": LOCAL_MODEL, "dimensions": LOCAL_DIM, "base_url": "", "region": ""},
+    "rerank": {"provider": "none", "model": "", "base_url": "", "region": ""},
 }
 
 _lock = threading.Lock()
@@ -108,7 +108,7 @@ def apply_update(current: dict, payload: dict) -> dict:
             continue
         for key in DEFAULTS[role]:
             if key in section:
-                cfg[role][key] = str(section[key] or "").strip() if key == "base_url" else section[key]
+                cfg[role][key] = str(section[key] or "").strip() if key in ("base_url", "region") else section[key]
 
     _validate(cfg)
     return cfg
@@ -130,6 +130,10 @@ def _validate(cfg: dict) -> None:
         if url and not url.startswith(("http://", "https://")):
             raise BadRequest(f"The {role} base URL must start with http:// or https://.")
         cfg[role]["base_url"] = url
+        region = str(cfg[role]["region"] or "").strip()
+        if region and not _REGION.match(region):
+            raise BadRequest(f"The {role} AWS region should look like us-west-2.")
+        cfg[role]["region"] = region
 
     for role, providers in ROLE_PROVIDERS.items():
         section = cfg[role]
@@ -180,23 +184,32 @@ def public(cfg: dict) -> dict:
             "api_key_source": _openai_key_source(cfg),
             "effective_base_url": openai["base_url"] or os.environ.get("OPENAI_BASE_URL", "").strip(),
         },
-        **{role: {**cfg[role], "effective_base_url": openai_base_url(cfg, role)} for role in ROLES},
+        **{
+            role: {
+                **cfg[role],
+                "effective_base_url": openai_base_url(cfg, role),
+                "effective_region": effective_region(cfg, role),
+            }
+            for role in ROLES
+        },
     }
 
 
-def effective_region(cfg: dict) -> str:
+def effective_region(cfg: dict, role: str | None = None) -> str:
+    """The role's own region, else the shared Bedrock region, else the environment."""
     return (
-        cfg["bedrock"]["region"]
+        (cfg[role]["region"] if role else "")
+        or cfg["bedrock"]["region"]
         or os.environ.get("AWS_REGION", "").strip()
         or os.environ.get("AWS_DEFAULT_REGION", "").strip()
         or "us-east-1"
     )
 
 
-def bedrock_credentials(cfg: dict) -> dict:
+def bedrock_credentials(cfg: dict, role: str) -> dict:
     bedrock = cfg["bedrock"]
     return {
-        "region": effective_region(cfg),
+        "region": effective_region(cfg, role),
         "access_key_id": bedrock["access_key_id"] or None,
         "secret_access_key": bedrock["secret_access_key"] or None,
         "session_token": bedrock["session_token"] or None,
