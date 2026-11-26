@@ -88,7 +88,7 @@ The **Quality** page (`#/quality`) shows approval rate and average scores, filte
 
 ## Run on Cloudera AI
 
-Import the repository as a project (prototype tasks are in `.project-metadata.yaml`). The install job runs `scripts/install.py` in the project runtime. It does not create a virtualenv. The application script is `start.py`. It listens on `127.0.0.1:$CDSW_APP_PORT`.
+Import the repository as a project (prototype tasks are in `.project-metadata.yaml`). The install job runs `scripts/install.py` in the project runtime. It does not create a virtualenv. The application script is `start.py`. It listens on `127.0.0.1:$CDSW_APP_PORT`. The code also runs when pasted into a notebook or session cell, where `__file__` does not exist: it finds the project from the working directory (or `RAGFLOW_ROOT`), and because a notebook already has an event loop it serves from a background thread and returns, instead of blocking the cell.
 
 Open the application from the project Applications tab. The React UI is the committed `frontend/dist`, so the runtime does not need Node.
 
