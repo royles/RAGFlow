@@ -413,7 +413,7 @@ function Turn({ turn, kbId, selected, onSelect, onFollowup }) {
               ))}
             </div>
           ) : null}
-          <Provenance result={result} />
+          {result.mode === "empty" ? null : <Provenance result={result} />}
           {result.interaction_id ? (
             <div className="review">
               <Feedback interactionId={result.interaction_id} initial={turn.interaction} />
@@ -442,7 +442,8 @@ function Provenance({ result }) {
   if (result.mode === "retrieval") parts.push("Retrieval only")
   if (result.rerank) parts.push(`re-ranked by ${result.rerank.model}`)
   if (result.citations.length) parts.push(`${result.citations.length} ${result.citations.length === 1 ? "passage" : "passages"}`)
-  parts.push(`${(result.elapsed_ms / 1000).toFixed(1)}s`)
+  if (Number.isFinite(result.elapsed_ms)) parts.push(`${(result.elapsed_ms / 1000).toFixed(1)}s`)
+  if (!parts.length) return null
   return (
     <p className="prov">
       {parts.join(" · ")}

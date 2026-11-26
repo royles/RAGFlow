@@ -61,6 +61,12 @@ class ChatTests(unittest.TestCase):
     def chats(self, kb):
         return self.http.get(f"/api/knowledge-bases/{kb['id']}/conversations").json()["conversations"]
 
+    def test_an_empty_knowledge_base_still_reports_a_time_so_the_page_shows_no_nan(self):
+        kb = self.http.post("/api/knowledge-bases", json={"name": "Empty", "chunk_size": 100, "chunk_overlap": 0}).json()
+        answer = self.ask(kb)
+        self.assertEqual(answer["mode"], "empty")
+        self.assertIsInstance(answer["elapsed_ms"], int)
+
     def test_the_first_question_starts_a_chat_titled_by_it(self):
         kb = self.kb()
         answer = self.ask(kb, "  What is the   Dublin warehouse code?  ")

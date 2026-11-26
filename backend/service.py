@@ -255,10 +255,10 @@ def ask(name_or_id: str, question: str, top_k: int = 5, source: str = "api", con
     cfg = model_settings.load()
     brief = _brief(current)
     if current["document_count"] == 0:
-        return {"knowledge_base": brief, "answer": "This knowledge base has no documents yet.", "mode": "empty", "citations": []}
+        return {"knowledge_base": brief, "answer": "This knowledge base has no documents yet.", "mode": "empty", "citations": [], "elapsed_ms": _elapsed(started)}
     hits = _retrieve(current, question, top_k, cfg)
     if not hits:
-        return {"knowledge_base": brief, "answer": "No matching passages were found.", "mode": "empty", "citations": []}
+        return {"knowledge_base": brief, "answer": "No matching passages were found.", "mode": "empty", "citations": [], "elapsed_ms": _elapsed(started)}
     llm, rerank = cfg["llm"], cfg["rerank"]
     if llm["provider"] != "none":
         answer = models.generate(cfg, _prompt(question, hits))
@@ -272,7 +272,7 @@ def ask(name_or_id: str, question: str, top_k: int = 5, source: str = "api", con
         "mode": mode,
         "llm": {"provider": llm["provider"], "model": llm["model"]} if mode == "llm" else None,
         "rerank": {"provider": rerank["provider"], "model": rerank["model"]} if rerank["provider"] != "none" else None,
-        "elapsed_ms": int((time.monotonic() - started) * 1000),
+        "elapsed_ms": _elapsed(started),
         "citations": hits,
     }
     if source == "ui" and not conversation_id:
@@ -282,6 +282,10 @@ def ask(name_or_id: str, question: str, top_k: int = 5, source: str = "api", con
     if conversation_id:
         chats.touch(conversation_id)
     return result
+
+
+def _elapsed(started: float) -> int:
+    return int((time.monotonic() - started) * 1000)
 
 
 def _audit(
