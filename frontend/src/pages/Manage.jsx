@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import AddSource from "../AddSource"
 import DrivePicker from "../DrivePicker"
 import { api } from "../api"
 import { Field, Icon } from "../components"
@@ -14,6 +15,7 @@ export default function Manage({ id, onChange }) {
   const [busy, setBusy] = useState("")
   const [uploads, setUploads] = useState([])
   const [picking, setPicking] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [dragging, setDragging] = useState(false)
 
   async function reload() {
@@ -146,6 +148,32 @@ export default function Manage({ id, onChange }) {
     )
   }
 
+  const addUrls = (urls) => {
+    setAdding(false)
+    runBatch(
+      urls.map((url) => ({
+        name: url,
+        task: (progress, uploadId) => {
+          progress(1)
+          return api.importUrl(id, url, uploadId)
+        },
+      })),
+    )
+  }
+
+  const addText = ({ title, text }) => {
+    setAdding(false)
+    runBatch([
+      {
+        name: title || "Pasted text",
+        task: (progress, uploadId) => {
+          progress(1)
+          return api.importText(id, title, text, uploadId)
+        },
+      },
+    ])
+  }
+
   const onUpload = (event) => {
     const files = [...(event.target.files || [])]
     event.target.value = ""
@@ -203,17 +231,21 @@ export default function Manage({ id, onChange }) {
         <h2>Documents</h2>
         <div className="row">
           <label className="file button">
-            <input type="file" multiple accept=".txt,.md,.markdown,.csv,.pdf,.docx" onChange={onUpload} disabled={busy === "upload"} />
+            <input type="file" multiple accept=".txt,.md,.markdown,.csv,.pdf,.docx,.html,.htm" onChange={onUpload} disabled={busy === "upload"} />
             {busy === "upload" ? "Uploading…" : "Upload"}
           </label>
           <button type="button" className="secondary" onClick={() => setPicking(true)} disabled={busy === "upload"}>
             <Icon name="drive" size={15} /> Google Drive
           </button>
+          <button type="button" className="secondary" onClick={() => setAdding(!adding)} disabled={busy === "upload"} aria-expanded={adding}>
+            Web address or text
+          </button>
           <button type="button" className="secondary" onClick={onSample} disabled={busy === "sample"}>
             {busy === "sample" ? "Indexing…" : "Load sample"}
           </button>
         </div>
-        <p className="hint">Select or drop several files at once. Text, Markdown, CSV, PDF, and DOCX. New files use the chunk size saved below.</p>
+        <p className="hint">Select or drop several files at once. Text, Markdown, CSV, PDF, DOCX, and HTML. New files use the chunk size saved below.</p>
+        {adding ? <AddSource onClose={() => setAdding(false)} onUrls={addUrls} onText={addText} /> : null}
         {picking ? <DrivePicker onClose={() => setPicking(false)} onImport={importFromDrive} /> : null}
         {uploads.length ? <UploadTracker uploads={uploads} busy={busy === "upload"} onClear={() => setUploads([])} /> : null}
         {documents.length === 0 ? (
@@ -224,6 +256,11 @@ export default function Manage({ id, onChange }) {
               <li key={doc.id}>
                 <div>
                   <strong>{doc.filename}</strong>
+                  {doc.source_url ? (
+                    <a className="source-link" href={doc.source_url} target="_blank" rel="noreferrer noopener">
+                      {doc.source_url}
+                    </a>
+                  ) : null}
                   <small>{doc.chunk_count} {doc.chunk_count === 1 ? "chunk" : "chunks"}</small>
                 </div>
                 <button type="button" className="danger" onClick={() => onDeleteDocument(doc.id)} disabled={busy === "delete-doc"}>
@@ -289,6 +326,7 @@ const newUploadId = () =>
 
 // What the server reports while a file is indexed: how many chunks, and how far each stage has got.
 function indexing(index) {
+  if (index?.phase === "downloading") return { text: "Downloading", total: 0 }
   if (!index || index.phase === "reading") return { text: "Reading file", total: 0 }
   if (index.phase === "chunking") return { text: "Splitting into chunks", total: 0 }
   if (!index.chunks) return { text: "Indexing", total: 0 }

@@ -121,6 +121,9 @@ def _init(conn: sqlite3.Connection) -> None:
     answers = {row["name"] for row in conn.execute("PRAGMA table_info(interactions)")}
     if "conversation_id" not in answers:
         conn.execute("ALTER TABLE interactions ADD COLUMN conversation_id TEXT")
+    docs = {row["name"] for row in conn.execute("PRAGMA table_info(documents)")}
+    if "source_url" not in docs:
+        conn.execute("ALTER TABLE documents ADD COLUMN source_url TEXT NOT NULL DEFAULT ''")
     if "followups" not in answers:
         conn.execute("ALTER TABLE interactions ADD COLUMN followups TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS interactions_conversation ON interactions(conversation_id)")
@@ -213,7 +216,7 @@ def list_documents(kb_id: str) -> list[dict[str, Any]]:
     with connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, kb_id, filename, byte_size, chunk_count, created_at
+            SELECT id, kb_id, filename, byte_size, chunk_count, created_at, source_url
             FROM documents
             WHERE kb_id = ?
             ORDER BY created_at DESC

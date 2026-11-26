@@ -6,13 +6,15 @@ Offsets always refer to `Extracted.text`.
 """
 
 import io
+import re
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path
 
 from backend.chunking import normalize
 from backend.errors import BadRequest
 
-SUPPORTED = {".txt", ".md", ".markdown", ".csv", ".pdf", ".docx"}
+SUPPORTED = {".txt", ".md", ".markdown", ".csv", ".pdf", ".docx", ".html", ".htm"}
 LINE_BASED = {".txt", ".md", ".markdown", ".csv"}
 
 
@@ -53,6 +55,8 @@ def extract(filename: str, data: bytes) -> Extracted:
         return _pdf(data)
     if suffix == ".docx":
         return Extracted(normalize(_docx(data)))
+    if suffix in (".html", ".htm"):
+        return Extracted(normalize(read_html(data)[1]))
     raw = data.decode("utf-8-sig", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
     text = raw.strip()
     if suffix not in LINE_BASED:
@@ -92,3 +96,55 @@ def _docx(data: bytes) -> str:
             if cells:
                 lines.append(" | ".join(cells))
     return "\n".join(lines).strip()
+
+
+class _Readable(HTMLParser):
+    """The visible text of a page, one block per paragraph, without scripts, menus or footers."""
+
+    SKIP = {"script", "style", "noscript", "svg", "template", "head", "nav", "footer", "aside", "form", "iframe"}
+    BLOCK = {"p", "div", "section", "article", "main", "header", "li", "ul", "ol", "table", "tr", "blockquote", "pre",
+             "h1", "h2", "h3", "h4", "h5", "h6", "dt", "dd", "figcaption"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.title = ""
+        self._skip = 0
+        self._in_title = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "title":
+            self._in_title = True
+        if tag in self.SKIP:
+            self._skip += 1
+        elif tag == "br":
+            self.parts.append("\n")
+        elif tag in self.BLOCK:
+            self.parts.append("\n\n")
+            if tag == "li":
+                self.parts.append("- ")
+
+    def handle_endtag(self, tag):
+        if tag == "title":
+            self._in_title = False
+        if tag in self.SKIP:
+            self._skip = max(0, self._skip - 1)
+        elif tag in self.BLOCK:
+            self.parts.append("\n\n")
+
+    def handle_data(self, data):
+        if self._in_title:
+            self.title += data
+        elif not self._skip:
+            self.parts.append(data)
+
+
+def read_html(data: bytes) -> tuple[str, str]:
+    """(title, readable text) of an HTML page."""
+    parser = _Readable()
+    parser.feed(data.decode("utf-8-sig", errors="replace"))
+    parser.close()
+    text = "".join(parser.parts)
+    lines = [" ".join(line.split()) for line in text.splitlines()]
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    return " ".join(parser.title.split()), text

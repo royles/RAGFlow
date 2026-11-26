@@ -56,6 +56,16 @@ SETTINGS = [
         "help": "How many batches of chunks are embedded at the same time, across all files being indexed. Higher is faster until the embedding service starts throttling (then lower it). 1 embeds one batch at a time. Large files benefit most.",
     },
     {
+        "key": "url_allow_private",
+        "env": "RAGFLOW_URL_ALLOW_PRIVATE",
+        "group": "Uploads and indexing",
+        "label": "Allow URLs on private networks (1 = yes)",
+        "type": "int",
+        "max": 1,
+        "default": 0,
+        "help": "Adding a document from a web address is limited to the public internet, so the server cannot be pointed at internal services or cloud metadata. Set 1 to also allow addresses on private networks, such as an internal wiki.",
+    },
+    {
         "key": "followup_count",
         "env": "RAGFLOW_FOLLOWUP_QUESTIONS",
         "group": "Answers",

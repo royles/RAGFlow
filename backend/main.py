@@ -183,6 +183,24 @@ async def import_drive_file(kb_id: str, payload: dict) -> dict:
     )
 
 
+@app.post("/api/knowledge-bases/{kb_id}/documents/url", status_code=201)
+async def import_url(kb_id: str, payload: dict) -> dict:
+    return await run_in_threadpool(
+        lambda: _call(lambda: service.add_url(kb_id, str(payload.get("url") or ""), str(payload.get("upload_id") or "")[:100]))
+    )
+
+
+@app.post("/api/knowledge-bases/{kb_id}/documents/text", status_code=201)
+async def import_text(kb_id: str, payload: dict) -> dict:
+    return await run_in_threadpool(
+        lambda: _call(
+            lambda: service.add_text(
+                kb_id, str(payload.get("title") or ""), str(payload.get("text") or ""), str(payload.get("upload_id") or "")[:100]
+            )
+        )
+    )
+
+
 @app.get("/api/uploads/{upload_id}")
 def upload_progress(upload_id: str) -> dict:
     job = progress.get(upload_id)

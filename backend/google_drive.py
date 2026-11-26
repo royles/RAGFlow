@@ -12,11 +12,12 @@ import base64
 import hashlib
 import json
 import os
+import re
 import secrets
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 
@@ -267,6 +268,19 @@ def _describe(item: dict) -> dict:
 
 def _quote(value: str) -> str:
     return value.replace("\\", "\\\\").replace("'", "\\'")
+
+
+_URL_ID = re.compile(r"/(?:document|spreadsheets|presentation|file)/d/([A-Za-z0-9_-]+)|[?&]id=([A-Za-z0-9_-]+)")
+
+
+def id_from_url(url: str) -> str:
+    """The Drive file id in a docs.google.com or drive.google.com link, or "" for any other address."""
+    parts = urlsplit(str(url))
+    host = (parts.hostname or "").lower()
+    if host not in ("docs.google.com", "drive.google.com"):
+        return ""
+    match = _URL_ID.search(parts.path + ("?" + parts.query if parts.query else ""))
+    return (match.group(1) or match.group(2)) if match else ""
 
 
 def _file_id(value: str) -> str:

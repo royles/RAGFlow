@@ -109,12 +109,14 @@ def neighbours(collection: str, wanted: dict[str, list[int]]) -> list[dict]:
 def _hit(payload: dict) -> dict:
     """A stored chunk as the app passes it around, with where it sits in its file when known."""
     where = {key: payload[key] for key in ("page_start", "page_end", "line_start", "line_end") if key in payload}
+    source = {"source_url": payload["source_url"]} if payload.get("source_url") else {}
     return {
         "document_id": payload.get("document_id", ""),
         "filename": payload.get("filename", ""),
         "chunk_index": payload.get("chunk_index", 0),
         "text": payload.get("text", ""),
         **where,
+        **source,
         "location": describe(where),
     }
 

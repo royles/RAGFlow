@@ -649,3 +649,13 @@ button.score:disabled { cursor: default; }
 .followup small { color: var(--accent); font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; }
 
 .tracker .meter .ahead { background: var(--accent); opacity: 0.35; }
+
+/* Add from a web address or pasted text */
+.add-source { display: grid; gap: 0.5rem; margin-top: 0.75rem; padding: 0.75rem 0.9rem; background: var(--sunken); border-radius: var(--radius); }
+.add-source .hint { margin: 0; }
+.add-source button[type="submit"] { justify-self: start; }
+.tabs { display: flex; gap: 0.25rem; align-items: center; }
+.tabs button { padding: 0.3rem 0.7rem; border-radius: 999px; background: transparent; color: var(--muted); border: 1px solid transparent; }
+.tabs button.on { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+.tabs .close { margin-left: auto; }
+.source-link { color: var(--muted); font-size: 0.78rem; word-break: break-all; }

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import audit, bedrock, chats, db, followups, google_drive, indexing, judge, model_settings, models, progress, vectors
+from backend import audit, bedrock, chats, db, followups, google_drive, indexing, judge, model_settings, models, progress, vectors, web_import
 from backend.chunking import chunk_located
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
@@ -113,7 +113,7 @@ def _batch_size(current: dict) -> int:
     return INDEX_BATCH
 
 
-def add_document(kb_id: str, filename: str, data: bytes, progress_id: str = "") -> dict:
+def add_document(kb_id: str, filename: str, data: bytes, progress_id: str = "", source_url: str = "") -> dict:
     """Read, chunk, embed, and store one file.
 
     Chunks are embedded and stored a batch at a time, so `progress_id` can report
@@ -121,13 +121,13 @@ def add_document(kb_id: str, filename: str, data: bytes, progress_id: str = "") 
     """
     progress.start(progress_id, filename)
     try:
-        return _index(kb_id, filename, data, progress_id)
+        return _index(kb_id, filename, data, progress_id, source_url)
     except Exception as exc:
         progress.update(progress_id, phase="failed", error=str(exc))
         raise
 
 
-def _index(kb_id: str, filename: str, data: bytes, progress_id: str) -> dict:
+def _index(kb_id: str, filename: str, data: bytes, progress_id: str, source_url: str = "") -> dict:
     current = _require(kb_id)
     safe_name = Path(filename or "document.txt").name
     if not safe_name or safe_name in {".", ".."}:
@@ -174,6 +174,7 @@ def _index(kb_id: str, filename: str, data: bytes, progress_id: str) -> dict:
                         "filename": safe_name,
                         "chunk_index": start + offset,
                         "text": piece,
+                        **({"source_url": source_url} if source_url else {}),
                         **document.locate(first, last),
                     },
                 }
@@ -193,6 +194,7 @@ def _index(kb_id: str, filename: str, data: bytes, progress_id: str) -> dict:
             "byte_size": len(data),
             "chunk_count": len(pieces),
             "created_at": _now(),
+            "source_url": source_url,
         }
         db.insert_document(row)
     except Exception:
@@ -216,6 +218,35 @@ def add_drive_file(kb_id: str, file_id: str, progress_id: str = "") -> dict:
         progress.update(progress_id, phase="failed", error=str(exc))
         raise
     return add_document(kb_id, filename, data, progress_id)
+
+
+def add_url(kb_id: str, url: str, progress_id: str = "") -> dict:
+    """Download a web page or file and index it. Google Docs links use the Drive connection."""
+    _require(kb_id)
+    progress.start(progress_id, str(url).strip())
+    progress.update(progress_id, phase="downloading")
+    try:
+        address = web_import.normalise(url)
+        file_id = google_drive.id_from_url(address)
+        if file_id:
+            filename, data = google_drive.fetch(file_id)
+        else:
+            fetched = web_import.fetch(address)
+            filename, data = fetched.filename, fetched.data
+    except Exception as exc:
+        progress.update(progress_id, phase="failed", error=str(exc))
+        raise
+    return add_document(kb_id, filename, data, progress_id, source_url=address)
+
+
+def add_text(kb_id: str, title: str, text: str, progress_id: str = "") -> dict:
+    """Index text the user pasted in."""
+    _require(kb_id)
+    text = str(text or "").strip()
+    if not text:
+        raise BadRequest("Paste some text first.")
+    name = web_import.clean_name(str(title or "").strip() or f"Pasted text {datetime.now().strftime('%Y-%m-%d %H%M')}", ".txt")
+    return add_document(kb_id, name, text.encode("utf-8"), progress_id)
 
 
 def add_sample(kb_id: str) -> dict:

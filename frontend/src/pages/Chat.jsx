@@ -470,6 +470,13 @@ function Passage({ turn, n, onSelect, onClose }) {
             <b>{n}</b> of {citations.length}
           </p>
           <h2>{item.filename}</h2>
+          {item.source_url ? (
+            <p className="muted">
+              <a className="source-link" href={item.source_url} target="_blank" rel="noreferrer noopener">
+                {item.source_url}
+              </a>
+            </p>
+          ) : null}
           <p className="muted">
             {item.location ? `${item.location} · ` : ""}Chunk {item.chunk_index} · {score}
           </p>

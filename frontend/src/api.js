@@ -77,6 +77,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ file_id: fileId, upload_id: uploadId }),
     }),
+  importUrl: (id, url, uploadId) =>
+    request(`/api/knowledge-bases/${id}/documents/url`, { method: "POST", body: JSON.stringify({ url, upload_id: uploadId }) }),
+  importText: (id, title, text, uploadId) =>
+    request(`/api/knowledge-bases/${id}/documents/text`, { method: "POST", body: JSON.stringify({ title, text, upload_id: uploadId }) }),
   loadSample: (id) => request(`/api/knowledge-bases/${id}/sample`, { method: "POST" }),
   deleteDocument: (id, documentId) =>
     request(`/api/knowledge-bases/${id}/documents/${documentId}`, { method: "DELETE" }),
