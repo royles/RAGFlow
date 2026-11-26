@@ -12,7 +12,7 @@ import os
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
-from backend import audit, service
+from backend import advanced, audit, service
 from backend.errors import BadRequest, NotFound
 
 mcp = MCPServer(
@@ -31,9 +31,9 @@ def transport_security() -> TransportSecuritySettings:
 
     On Cloudera AI the public application hostname is assigned at deploy time
     and the process only binds to loopback. Host checking is turned off in
-    that case unless RAGFLOW_MCP_ALLOWED_HOSTS is set.
+    that case unless allowed hosts are set on the Advanced page (RAGFLOW_MCP_ALLOWED_HOSTS).
     """
-    extra = [item.strip() for item in os.environ.get("RAGFLOW_MCP_ALLOWED_HOSTS", "").split(",") if item.strip()]
+    extra = advanced.hosts()
     if os.environ.get("CDSW_APP_PORT", "").strip() and not extra:
         return TransportSecuritySettings(enable_dns_rebinding_protection=False)
 

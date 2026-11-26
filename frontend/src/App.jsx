@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 import { api } from "./api"
 import { Icon } from "./components"
 import Agents from "./pages/Agents"
+import Advanced from "./pages/Advanced"
 import Chat from "./pages/Chat"
 import Google from "./pages/Google"
 import Manage from "./pages/Manage"
@@ -20,6 +21,7 @@ function readRoute() {
   if (hash === "/agents") return { name: "agents" }
   if (hash === "/quality") return { name: "quality" }
   if (hash === "/google") return { name: "google" }
+  if (hash === "/advanced") return { name: "advanced" }
   return { name: "home" }
 }
 
@@ -88,6 +90,10 @@ export default function App() {
             <Icon name="drive" size={15} />
             <span>Google Drive</span>
           </a>
+          <a href="#/advanced" aria-current={route.name === "advanced" ? "page" : undefined}>
+            <Icon name="sliders" size={15} />
+            <span>Advanced</span>
+          </a>
           <a href="#/agents" aria-current={route.name === "agents" ? "page" : undefined}>
             <Icon name="plug" size={15} />
             <span>Agents (MCP)</span>
@@ -119,6 +125,11 @@ export default function App() {
         {route.name === "google" ? (
           <div className="page">
             <Google />
+          </div>
+        ) : null}
+        {route.name === "advanced" ? (
+          <div className="page">
+            <Advanced />
           </div>
         ) : null}
         {route.name === "agents" ? (

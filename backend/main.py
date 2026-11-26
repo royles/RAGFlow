@@ -13,7 +13,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, RedirectResponse, Response
 
-from backend import accesslog, audit, chunk_preview, google_drive, judge, model_settings, model_test, service
+from backend import accesslog, advanced, audit, chunk_preview, google_drive, judge, model_settings, model_test, service
 from backend.catalog import public_catalog
 from backend.errors import BadRequest, NotFound
 from backend.mcp_server import mcp, transport_security
@@ -22,6 +22,7 @@ from backend.settings import ROOT, audit_retention_days
 DIST = ROOT / "frontend" / "dist"
 
 accesslog.install()
+advanced.apply()
 
 # The MCP route is registered on this app, not mounted under a sub-path.
 # A Starlette Mount only matches /mcp/ (with a slash). MCP clients post to /mcp.
@@ -84,6 +85,16 @@ def chunk_boundaries(payload: dict) -> dict:
     return _call(
         lambda: chunk_preview.preview(payload.get("text"), payload.get("chunk_size"), payload.get("chunk_overlap"))
     )
+
+
+@app.get("/api/advanced")
+def advanced_settings() -> dict:
+    return advanced.public()
+
+
+@app.put("/api/advanced")
+def advanced_save(payload: dict) -> dict:
+    return _call(lambda: advanced.update(payload))
 
 
 @app.get("/api/models")
@@ -331,4 +342,4 @@ def _safe_file(asset_path: str) -> Path | None:
 
 
 def _remote_qdrant() -> bool:
-    return bool(os.environ.get("QDRANT_URL", "").strip())
+    return bool(advanced.get("qdrant_url"))

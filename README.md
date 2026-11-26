@@ -42,6 +42,20 @@ The default view is a clean chat. Pick a knowledge base in the left panel and as
 
 Everything else is out of the way: **Manage** (per knowledge base) holds documents, chunking, and the chunk preview; **New knowledge base**, **Quality**, **Models**, and **Agents (MCP)** are in the left panel. The UI follows the system light or dark setting.
 
+## Advanced settings
+
+The **Advanced** page (`#/advanced`) groups the environment-variable overrides, each with a short explanation, the variable it replaces, and where the current value comes from (saved here, the environment, or the default):
+
+| Group | Setting | Variable |
+| --- | --- | --- |
+| Uploads and indexing | Largest upload (MB) | `RAGFLOW_MAX_UPLOAD_MB` |
+| Uploads and indexing | Most chunks per upload | `RAGFLOW_MAX_CHUNKS` |
+| Audit log | Keep answers for (days), applies after restart | `RAGFLOW_AUDIT_RETENTION_DAYS` |
+| Vector store | Qdrant server URL and API key | `QDRANT_URL`, `QDRANT_API_KEY` |
+| Agents (MCP) | Allowed hosts for `/mcp`, applies after restart | `RAGFLOW_MCP_ALLOWED_HOSTS` |
+
+A saved value wins over the environment variable, which wins over the default. Saved values are kept in `data/advanced_settings.json` (mode 0600; the Qdrant key is never sent back to the browser), so they survive restarts. On every start, and after every save, they are written back into the process environment, so anything that reads the variable directly sees them. Clearing a field puts the environment's own value back. Secrets and the other variables RAGFlow reads (`RAGFLOW_DATA_DIR`, `CDSW_APP_PORT`, `CDSW_MASTER_IP`) are shown for reference when they cannot be changed from inside the app. Bedrock, OpenAI and Google credentials have their own pages.
+
 ## Google Drive
 
 Connect Google Drive once, then pick files from it in any knowledge base: **Manage**, **Google Drive**. The picker browses My Drive and Shared with me, searches by name, and imports several files at once through the same progress tracker as uploads. Text, Markdown, CSV, PDF and DOCX files are downloaded as they are. Google Docs and Slides are exported as text, and Sheets as CSV.

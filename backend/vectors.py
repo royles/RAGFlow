@@ -20,6 +20,7 @@ from qdrant_client.models import (
     VectorParams,
 )
 
+from backend import advanced
 from backend.settings import data_dir
 
 _DISTANCES = {
@@ -115,14 +116,15 @@ def close_client() -> None:
 
 
 def _remote() -> bool:
-    return bool(os.environ.get("QDRANT_URL", "").strip())
+    return bool(advanced.get("qdrant_url"))
 
 
 def _qdrant() -> QdrantClient:
     global _client, _client_key
-    url = os.environ.get("QDRANT_URL", "").strip()
+    url = advanced.get("qdrant_url")
+    api_key = advanced.get("qdrant_api_key") or None
     if url:
-        key = ("url", url)
+        key = ("url", url, api_key)
     else:
         path = data_dir() / "qdrant"
         path.mkdir(parents=True, exist_ok=True)
@@ -135,7 +137,6 @@ def _qdrant() -> QdrantClient:
         except Exception:
             pass
     if url:
-        api_key = os.environ.get("QDRANT_API_KEY", "").strip() or None
         _client = QdrantClient(url=url, api_key=api_key, timeout=30)
     else:
         _client = QdrantClient(path=str(path), force_disable_check_same_thread=True)

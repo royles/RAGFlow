@@ -62,6 +62,8 @@ export const api = {
       }
       xhr.send(body)
     }),
+  advanced: () => request("/api/advanced"),
+  saveAdvanced: (payload) => request("/api/advanced", { method: "PUT", body: JSON.stringify(payload) }),
   google: () => request("/api/google"),
   saveGoogle: (payload) => request("/api/google", { method: "PUT", body: JSON.stringify(payload) }),
   googleConnect: (redirectUri) =>

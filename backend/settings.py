@@ -16,23 +16,11 @@ def data_dir() -> Path:
     return path
 
 
-DEFAULT_MAX_CHUNKS = 0
-
-
 def max_chunks() -> int:
-    """Most chunks one upload may produce. Unset or 0 means no limit.
+    """Most chunks one upload may produce. 0 means no limit."""
+    from backend import advanced
 
-    Every chunk is embedded, and Bedrock embeddings are one request per chunk,
-    so the limit keeps a single upload from running past the proxy timeout.
-    """
-    raw = os.environ.get("RAGFLOW_MAX_CHUNKS", "").strip()
-    if not raw:
-        return DEFAULT_MAX_CHUNKS
-    try:
-        value = int(raw)
-    except ValueError:
-        return DEFAULT_MAX_CHUNKS
-    return value if value >= 0 else DEFAULT_MAX_CHUNKS
+    return advanced.get("max_chunks")
 
 
 def sample_path() -> Path:
@@ -40,20 +28,14 @@ def sample_path() -> Path:
 
 
 def audit_retention_days() -> int:
-    """Days to keep answers in the audit log. RAGFLOW_AUDIT_RETENTION_DAYS=0 (the default) keeps them all."""
-    try:
-        return max(0, int(os.environ.get("RAGFLOW_AUDIT_RETENTION_DAYS", "").strip() or 0))
-    except ValueError:
-        return 0
+    """Days to keep answers in the audit log. 0 keeps them all."""
+    from backend import advanced
+
+    return advanced.get("audit_retention_days")
 
 
 def max_upload_bytes() -> int:
-    """Largest file one upload may carry. RAGFLOW_MAX_UPLOAD_MB unset or 0 means no limit.
+    """Largest file one upload may carry, in bytes. 0 means no limit."""
+    from backend import advanced
 
-    The file is read into memory, so set a limit if the runtime has little RAM.
-    """
-    try:
-        megabytes = int(os.environ.get("RAGFLOW_MAX_UPLOAD_MB", "").strip() or 0)
-    except ValueError:
-        return 0
-    return max(0, megabytes) * 1024 * 1024
+    return advanced.get("max_upload_mb") * 1024 * 1024

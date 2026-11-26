@@ -601,3 +601,18 @@ button.score:disabled { cursor: default; }
 .pick .meta { color: var(--muted); font-size: 0.75rem; }
 .pick input[type="checkbox"] { width: auto; margin: 0; }
 .modal .banner { margin: 0 1rem; }
+
+/* Advanced */
+.setting { display: grid; gap: 0.35rem; padding: 0.9rem 0; border-top: 1px solid var(--border); }
+.panel h2 + .setting, .panel .hint + .setting { border-top: 0; padding-top: 0.25rem; }
+.setting-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.setting-head label, .setting-head strong { font-weight: 600; font-size: 0.9rem; }
+.setting-head code { padding: 0.1rem 0.4rem; background: var(--sunken); border-radius: 4px; font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+.badge { padding: 0.05rem 0.5rem; font-size: 0.7rem; border-radius: 999px; background: var(--sunken); color: var(--muted); }
+.badge.saved { background: var(--accent-soft); color: var(--accent); }
+.badge.environment { background: var(--ok-soft); color: var(--ok); }
+.badge.restart { background: var(--warn-soft); color: var(--warn); }
+.setting-input { display: flex; gap: 0.5rem; }
+.setting-input input { flex: 1; min-width: 0; }
+.setting .hint { margin: 0; }
+.value-line { margin: 0; font-family: var(--mono); font-size: 0.85rem; word-break: break-all; }
