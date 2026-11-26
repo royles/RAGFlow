@@ -115,7 +115,7 @@ export function Feedback({ interactionId, initial = null, onChange }) {
 }
 
 export function ScoreChips({ item }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const claims = item.faithfulness_claims || []
   const unsupported = claims.filter((claim) => !claim.supported)
   const scored = item.faithfulness !== null && item.faithfulness !== undefined
