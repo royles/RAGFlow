@@ -13,6 +13,7 @@ from backend.embeddings import local_embed
 
 app = FastAPI()
 calls: list[dict] = []
+judge_replies: dict[str, str] = {}
 
 
 def _words(text: str) -> set[str]:
@@ -24,7 +25,15 @@ async def chat(request: Request):
     body = await request.json()
     calls.append({"path": "chat", "host": request.headers.get("host"), "auth": request.headers.get("authorization"), "body": body})
     prompt = body["messages"][0]["content"]
-    text = "ready" if "single word" in prompt else "The fake model answers from passage [1]."
+    if "strict fact checker" in prompt:
+        text = judge_replies.get(
+            "faithfulness",
+            '{"claims": [{"claim": "It answers from passage 1", "supported": true, "source": 1}]}',
+        )
+    elif "grading an answer" in prompt:
+        text = judge_replies.get("relevance", '{"score": 5, "reason": "Directly answers it."}')
+    else:
+        text = "ready" if "single word" in prompt else "The fake model answers from passage [1]."
     return {
         "id": "chatcmpl-fake",
         "object": "chat.completion",

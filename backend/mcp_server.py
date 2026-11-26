@@ -12,7 +12,7 @@ import os
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 
-from backend import service
+from backend import audit, service
 from backend.errors import BadRequest, NotFound
 
 mcp = MCPServer(
@@ -95,4 +95,16 @@ def ask_knowledge_base(knowledge_base: str, question: str, top_k: int = 5) -> di
     configured re-rank model reorders the passages first. knowledge_base is an
     id or a unique name.
     """
-    return _guard(lambda: service.ask(knowledge_base, question, top_k))
+    return _guard(lambda: service.ask(knowledge_base, question, top_k, "mcp"))
+
+
+@mcp.tool()
+def rate_answer(interaction_id: str, rating: str, reason: str = "", comment: str = "") -> dict:
+    """Record feedback on an answer from ask_knowledge_base, using its interaction_id.
+
+    rating: "up", "down", or "none" to withdraw an earlier rating.
+    reason: for "down" only, one of incorrect, incomplete, wrong_sources, unclear, other.
+    comment: optional note, up to 1000 characters. Feedback is kept in the audit log.
+    """
+    result = _guard(lambda: audit.rate(interaction_id, rating, reason, comment))
+    return {"interaction_id": interaction_id, "rating": result["rating"]}

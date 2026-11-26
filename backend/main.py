@@ -1,17 +1,21 @@
 """FastAPI application: JSON API, React UI, and the MCP endpoint."""
 
+import csv
+import io
+import json
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
-from backend import accesslog, chunk_preview, model_settings, model_test, service
+from backend import accesslog, audit, chunk_preview, judge, model_settings, model_test, service
 from backend.catalog import public_catalog
 from backend.errors import BadRequest, NotFound
 from backend.mcp_server import mcp, transport_security
-from backend.settings import ROOT
+from backend.settings import ROOT, audit_retention_days
 
 DIST = ROOT / "frontend" / "dist"
 
@@ -32,6 +36,7 @@ mcp_app = mcp.streamable_http_app(
 async def lifespan(_app: FastAPI):
     # A mounted Starlette app does not run its own lifespan. The session
     # manager has to be started here or every MCP request fails.
+    _call_quietly(lambda: audit.purge(audit_retention_days()))
     async with mcp.session_manager.run():
         yield
 
@@ -39,6 +44,13 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="RAGFlow", lifespan=lifespan, redirect_slashes=False)
 for route in mcp_app.routes:
     app.router.routes.insert(0, route)
+
+
+def _call_quietly(func) -> None:
+    try:
+        func()
+    except Exception:
+        logging.getLogger("ragflow").exception("Startup task failed")
 
 
 def _call(func):
@@ -162,7 +174,69 @@ def search(kb_id: str, payload: dict) -> dict:
 
 @app.post("/api/knowledge-bases/{kb_id}/ask")
 def ask(kb_id: str, payload: dict) -> dict:
-    return _call(lambda: service.ask(kb_id, str(payload.get("question") or ""), payload.get("top_k", 5)))
+    source = "ui" if payload.get("source") == "ui" else "api"
+    return _call(lambda: service.ask(kb_id, str(payload.get("question") or ""), payload.get("top_k", 5), source))
+
+
+@app.get("/api/interactions/{interaction_id}")
+def interaction(interaction_id: str) -> dict:
+    return _call(lambda: audit.get(interaction_id))
+
+
+@app.post("/api/interactions/{interaction_id}/feedback")
+def feedback(interaction_id: str, payload: dict) -> dict:
+    return _call(
+        lambda: audit.rate(
+            interaction_id,
+            str(payload.get("rating") or ""),
+            str(payload.get("reason") or ""),
+            str(payload.get("comment") or ""),
+        )
+    )
+
+
+@app.post("/api/interactions/{interaction_id}/score")
+def score(interaction_id: str) -> dict:
+    return _call(lambda: judge.score_interaction(interaction_id))
+
+
+@app.get("/api/audit")
+def audit_list(kb_id: str = "", rating: str = "", scored: str = "", limit: int = 50, offset: int = 0) -> dict:
+    return _call(lambda: audit.list_items(kb_id, rating, scored, limit, offset))
+
+
+@app.get("/api/audit/export")
+def audit_export(kb_id: str = "", format: str = "jsonl") -> Response:
+    if format not in ("jsonl", "csv"):
+        raise HTTPException(status_code=400, detail="format must be jsonl or csv.")
+    items = list(audit.export(kb_id))
+    if format == "jsonl":
+        body = "".join(json.dumps(item, ensure_ascii=False) + "\n" for item in items)
+        media = "application/x-ndjson"
+    else:
+        body, media = _audit_csv(items), "text/csv"
+    return Response(body, media_type=media, headers={"Content-Disposition": f'attachment; filename="ragflow-audit.{format}"'})
+
+
+_CSV_COLUMNS = (
+    "id", "created_at", "source", "kb_id", "kb_name", "question", "answer", "mode", "rating", "rating_reason",
+    "rating_comment", "faithfulness", "relevance", "relevance_reason", "judge_model", "judge_error", "llm_provider",
+    "llm_model", "rerank_provider", "rerank_model", "embed_provider", "embed_model", "chunk_size", "chunk_overlap",
+    "nn_algorithm", "top_k", "elapsed_ms",
+)
+
+
+def _audit_csv(items: list[dict]) -> str:
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(_CSV_COLUMNS)
+    for item in items:
+        # A leading = + - @ makes spreadsheets run the cell as a formula.
+        writer.writerow(
+            [f"'{value}" if isinstance(value, str) and value[:1] in ("=", "+", "-", "@") else value
+             for value in (item.get(column) for column in _CSV_COLUMNS)]
+        )
+    return out.getvalue()
 
 
 @app.get("/")

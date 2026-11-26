@@ -17,6 +17,7 @@ ROLE_PROVIDERS = {
     "llm": ("none", "bedrock", "openai"),
     "embedding": ("local", "bedrock", "openai"),
     "rerank": ("none", "bedrock", "openai"),
+    "judge": ("none", "same", "bedrock", "openai"),
 }
 ROLES = tuple(ROLE_PROVIDERS)
 
@@ -34,6 +35,7 @@ DEFAULTS = {
     "llm": {"provider": "none", "model": "", "base_url": "", "region": ""},
     "embedding": {"provider": "local", "model": LOCAL_MODEL, "dimensions": LOCAL_DIM, "base_url": "", "region": ""},
     "rerank": {"provider": "none", "model": "", "base_url": "", "region": ""},
+    "judge": {"provider": "none", "model": "", "base_url": "", "region": ""},
 }
 
 _lock = threading.Lock()
@@ -143,9 +145,9 @@ def _validate(cfg: dict) -> None:
         section["provider"] = provider
         section["model"] = str(section["model"] or "").strip()
 
-    for role in ("llm", "rerank"):
+    for role in ("llm", "rerank", "judge"):
         section = cfg[role]
-        if section["provider"] == "none":
+        if section["provider"] in ("none", "same"):
             section["model"] = ""
         elif not section["model"]:
             raise BadRequest(f"Enter a {role} model id.")

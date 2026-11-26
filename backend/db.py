@@ -1,4 +1,4 @@
-"""SQLite catalog of knowledge bases and the files uploaded into them.
+"""SQLite catalog of knowledge bases and the files uploaded into them, plus the audit tables.
 
 Vectors live in Qdrant. This database only remembers the settings and the
 file names, so the UI can list them without scanning the index.
@@ -66,6 +66,47 @@ def _init(conn: sqlite3.Connection) -> None:
             created_at TEXT NOT NULL,
             FOREIGN KEY (kb_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS interactions (
+            id TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL,
+            source TEXT NOT NULL,
+            kb_id TEXT NOT NULL,
+            kb_name TEXT NOT NULL,
+            question TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            top_k INTEGER NOT NULL,
+            llm_provider TEXT NOT NULL DEFAULT '',
+            llm_model TEXT NOT NULL DEFAULT '',
+            rerank_provider TEXT NOT NULL DEFAULT '',
+            rerank_model TEXT NOT NULL DEFAULT '',
+            embed_provider TEXT NOT NULL DEFAULT '',
+            embed_model TEXT NOT NULL DEFAULT '',
+            chunk_size INTEGER,
+            chunk_overlap INTEGER,
+            nn_algorithm TEXT NOT NULL DEFAULT '',
+            elapsed_ms INTEGER NOT NULL DEFAULT 0,
+            citations TEXT NOT NULL DEFAULT '[]',
+            judge_model TEXT NOT NULL DEFAULT '',
+            judged_at TEXT,
+            faithfulness REAL,
+            faithfulness_claims TEXT NOT NULL DEFAULT '[]',
+            relevance REAL,
+            relevance_reason TEXT NOT NULL DEFAULT '',
+            judge_error TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS interactions_created ON interactions(created_at);
+        CREATE INDEX IF NOT EXISTS interactions_kb ON interactions(kb_id);
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            interaction_id TEXT NOT NULL,
+            rating TEXT NOT NULL,
+            reason TEXT NOT NULL DEFAULT '',
+            comment TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (interaction_id) REFERENCES interactions(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS feedback_interaction ON feedback(interaction_id);
         """
     )
     existing = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge_bases)")}

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import db, model_settings, models, vectors
+from backend import audit, db, judge, model_settings, models, vectors
 from backend.chunking import chunk_text
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
@@ -177,7 +177,7 @@ def search(name_or_id: str, question: str, top_k: int = 5) -> dict:
     return {"knowledge_base": _brief(current), "citations": hits}
 
 
-def ask(name_or_id: str, question: str, top_k: int = 5) -> dict:
+def ask(name_or_id: str, question: str, top_k: int = 5, source: str = "api") -> dict:
     """Answer from retrieved passages.
 
     With an LLM configured, the model must use those passages. Without one, the
@@ -202,7 +202,7 @@ def ask(name_or_id: str, question: str, top_k: int = 5) -> dict:
     else:
         answer = _passages(hits)
         mode = "retrieval"
-    return {
+    result = {
         "knowledge_base": brief,
         "answer": answer,
         "mode": mode,
@@ -211,6 +211,41 @@ def ask(name_or_id: str, question: str, top_k: int = 5) -> dict:
         "elapsed_ms": int((time.monotonic() - started) * 1000),
         "citations": hits,
     }
+    result["interaction_id"] = _audit(result, current, question, cfg, _top_k(top_k), source)
+    return result
+
+
+def _audit(result: dict, current: dict, question: str, cfg: dict, top_k: int, source: str) -> str | None:
+    """Log the answer for review. A logging failure must never cost the user their answer."""
+    try:
+        interaction_id = audit.record(
+            {
+                "source": source if source in ("ui", "mcp", "api") else "api",
+                "kb_id": current["id"],
+                "kb_name": current["name"],
+                "question": question,
+                "answer": result["answer"],
+                "mode": result["mode"],
+                "top_k": top_k,
+                "llm_provider": cfg["llm"]["provider"] if result["mode"] == "llm" else "",
+                "llm_model": cfg["llm"]["model"] if result["mode"] == "llm" else "",
+                "rerank_provider": cfg["rerank"]["provider"],
+                "rerank_model": cfg["rerank"]["model"],
+                "embed_provider": cfg["embedding"]["provider"],
+                "embed_model": cfg["embedding"]["model"],
+                "chunk_size": current["chunk_size"],
+                "chunk_overlap": current["chunk_overlap"],
+                "nn_algorithm": current["nn_algorithm"],
+                "elapsed_ms": result["elapsed_ms"],
+                "citations": result["citations"],
+            }
+        )
+    except Exception:
+        log.exception("Could not write the audit record")
+        return None
+    if result["mode"] == "llm" and judge.enabled(cfg):
+        judge.schedule(interaction_id)
+    return interaction_id
 
 
 def resolve(name_or_id: str) -> dict:

@@ -15,6 +15,7 @@ NN_ALGORITHMS = [
 
 PROVIDER_LABELS = {
     "none": "None",
+    "same": "Same as the LLM",
     "local": "Local hashing (no account)",
     "bedrock": "AWS Bedrock",
     "openai": "OpenAI client API",
@@ -60,6 +61,9 @@ MODEL_SUGGESTIONS = {
         ],
     },
 }
+
+
+MODEL_SUGGESTIONS["judge"] = MODEL_SUGGESTIONS["llm"]
 
 
 def public_catalog() -> dict:

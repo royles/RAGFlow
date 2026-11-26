@@ -4,13 +4,20 @@ from backend import bedrock, model_settings, openai_compat
 from backend.errors import BadRequest
 
 
-def generate(cfg: dict, prompt: str) -> str:
-    llm = cfg["llm"]
-    if llm["provider"] == "bedrock":
-        return bedrock.converse(model_settings.bedrock_credentials(cfg, "llm"), llm["model"], prompt)
-    if llm["provider"] == "openai":
-        return openai_compat.chat(model_settings.openai_credentials(cfg, "llm"), llm["model"], prompt)
-    raise BadRequest("No LLM is configured.")
+def resolve(cfg: dict, role: str) -> str:
+    """The judge can be set to reuse the LLM; every other role is itself."""
+    return "llm" if role == "judge" and cfg["judge"]["provider"] == "same" else role
+
+
+def generate(cfg: dict, prompt: str, role: str = "llm") -> str:
+    """Run a prompt on the LLM, or on the judge model when role is "judge"."""
+    role = resolve(cfg, role)
+    section = cfg[role]
+    if section["provider"] == "bedrock":
+        return bedrock.converse(model_settings.bedrock_credentials(cfg, role), section["model"], prompt)
+    if section["provider"] == "openai":
+        return openai_compat.chat(model_settings.openai_credentials(cfg, role), section["model"], prompt)
+    raise BadRequest("No LLM is configured." if role == "llm" else "No judge model is configured.")
 
 
 def rerank_scores(cfg: dict, query: str, documents: list[str], top_n: int) -> list[tuple[int, float]]:

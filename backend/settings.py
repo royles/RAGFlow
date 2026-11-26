@@ -37,3 +37,11 @@ def max_chunks() -> int:
 
 def sample_path() -> Path:
     return ROOT / "samples" / "handbook.txt"
+
+
+def audit_retention_days() -> int:
+    """Days to keep answers in the audit log. RAGFLOW_AUDIT_RETENTION_DAYS=0 (the default) keeps them all."""
+    try:
+        return max(0, int(os.environ.get("RAGFLOW_AUDIT_RETENTION_DAYS", "").strip() or 0))
+    except ValueError:
+        return 0

@@ -2,7 +2,7 @@
 
 import time
 
-from backend import embeddings, model_settings, models
+from backend import embeddings, judge, model_settings, models
 from backend.errors import BadRequest
 
 _QUERY = "What is the capital of France?"
@@ -40,7 +40,11 @@ def run(role: str, draft: dict) -> dict:
 def _skipped(role: str, provider: str) -> str:
     if provider == "local":
         return "The local embedder runs inside this app and needs no credentials."
-    return {"llm": "No LLM: answers are the retrieved passages.", "rerank": "No re-ranking."}[role]
+    return {
+        "llm": "No LLM: answers are the retrieved passages.",
+        "rerank": "No re-ranking.",
+        "judge": "No judge: answers are not scored automatically.",
+    }[role]
 
 
 def _check_llm(cfg: dict) -> str:
@@ -63,4 +67,4 @@ def _check_rerank(cfg: dict) -> str:
     return f"The model {verdict} (score {score:.3f})."
 
 
-_CHECKS = {"llm": _check_llm, "embedding": _check_embedding, "rerank": _check_rerank}
+_CHECKS = {"llm": _check_llm, "embedding": _check_embedding, "rerank": _check_rerank, "judge": judge.check}
