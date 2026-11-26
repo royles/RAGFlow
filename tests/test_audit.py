@@ -85,6 +85,7 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(item["question"], "What is the Dublin warehouse code?")
         self.assertEqual(item["answer"], answer["answer"])
         self.assertEqual(item["source"], "ui")
+        self.assertFalse(answer["scoring"])
         self.assertEqual(item["kb_name"], "Handbook")
         self.assertEqual((item["llm_provider"], item["llm_model"]), ("openai", "fake-chat"))
         self.assertEqual((item["chunk_size"], item["chunk_overlap"]), (100, 0))
@@ -162,7 +163,9 @@ class AuditTests(unittest.TestCase):
             }
         )
         fake_openai.judge_replies["relevance"] = "Sure!\n```json\n{\"score\": 4, \"reason\": \"Mostly.\"}\n```"
-        item = self.wait_for_scores(self.ask(self.kb())["interaction_id"])
+        answer = self.ask(self.kb())
+        self.assertTrue(answer["scoring"])
+        item = self.wait_for_scores(answer["interaction_id"])
         self.assertEqual(item["faithfulness"], 0.5)
         self.assertEqual([c["supported"] for c in item["faithfulness_claims"]], [True, False])
         self.assertEqual(item["relevance"], 0.75)

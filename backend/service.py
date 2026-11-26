@@ -243,7 +243,8 @@ def _audit(result: dict, current: dict, question: str, cfg: dict, top_k: int, so
     except Exception:
         log.exception("Could not write the audit record")
         return None
-    if result["mode"] == "llm" and judge.enabled(cfg):
+    result["scoring"] = result["mode"] == "llm" and judge.enabled(cfg)
+    if result["scoring"]:
         judge.schedule(interaction_id)
     return interaction_id
 

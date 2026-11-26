@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { api } from "../api"
 import { Icon } from "../components"
+import { Feedback, Scores } from "../quality"
 import { Answer, Highlight, queryTerms } from "../lib/text"
 
 // Conversations survive switching between knowledge bases, not a page reload.
@@ -269,6 +270,12 @@ function Turn({ turn, kbId, selected, onSelect }) {
             </div>
           ) : null}
           <Provenance result={result} />
+          {result.interaction_id ? (
+            <div className="review">
+              <Feedback interactionId={result.interaction_id} />
+              {result.scoring ? <Scores interactionId={result.interaction_id} /> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </article>

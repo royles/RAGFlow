@@ -18,6 +18,12 @@ const ROLES = [
     title: "Re-rank model",
     blurb: "Reorders the retrieved passages by relevance before the answer is written.",
   },
+  {
+    id: "judge",
+    title: "Judge model (optional)",
+    blurb:
+      "Scores each answer for faithfulness to its sources and relevance to the question. Use a different model from the LLM for an independent check, or the same one to keep setup simple.",
+  },
 ]
 
 const EMPTY_SECRETS = { access_key_id: "", secret_access_key: "", session_token: "", api_key: "" }
@@ -42,6 +48,7 @@ export default function Models() {
       llm: { ...next.llm },
       embedding: { ...next.embedding },
       rerank: { ...next.rerank },
+      judge: { ...next.judge },
     })
     setSecrets(EMPTY_SECRETS)
     setClear([])
@@ -70,6 +77,7 @@ export default function Models() {
       llm: draft.llm,
       embedding: draft.embedding,
       rerank: draft.rerank,
+      judge: draft.judge,
       clear,
     }
   }
@@ -92,7 +100,7 @@ export default function Models() {
     const first = catalog.model_suggestions[role]?.[provider]?.[0]
     const changes = { provider, model: first ? first.model : "" }
     if (role === "embedding") changes.dimensions = provider === "local" ? 384 : first?.dimensions || 1024
-    if (provider === "none" || provider === "local") changes.model = provider === "local" ? "local-hashing" : ""
+    if (provider === "none" || provider === "same" || provider === "local") changes.model = provider === "local" ? "local-hashing" : ""
     setRole(role, changes)
   }
 
@@ -129,7 +137,7 @@ export default function Models() {
     setNotice("")
     try {
       adopt(await api.saveModels(payload()))
-      setNotice("Saved. The LLM and re-rank model apply to the next question.")
+      setNotice("Saved. Model changes apply to the next question.")
     } catch (err) {
       setError(err.message)
     } finally {
@@ -148,7 +156,7 @@ export default function Models() {
     <form className="workspace models" onSubmit={onSave}>
       <div className="section-head">
         <h1>Models</h1>
-        <p>Credentials and the three models RAGFlow uses. Secrets are stored on the server and never shown again.</p>
+        <p>Credentials and the models RAGFlow uses. Secrets are stored on the server and never shown again.</p>
       </div>
       {error ? <p className="banner">{error}</p> : null}
       {notice ? <p className="notice">{notice}</p> : null}
@@ -290,7 +298,7 @@ function Secret({ label, name, isSet, value, onChange, cleared, onClear }) {
 function RoleCard({ role, catalog, value, fallbackRegion, fallbackUrl, result, testing, onProvider, onBaseUrl, onRegion, onModel, onDimensions, onTest }) {
   const providers = catalog.providers[role.id]
   const suggestions = catalog.model_suggestions[role.id]?.[value.provider] || []
-  const fixed = value.provider === "none" || value.provider === "local"
+  const fixed = ["none", "same", "local"].includes(value.provider)
   const listId = `models-${role.id}`
   return (
     <section className="panel role">

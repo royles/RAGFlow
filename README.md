@@ -24,10 +24,11 @@ Globally, on the Models page (`#/models`):
 | LLM | none, Bedrock (Converse), OpenAI chat completions |
 | Embedding model | local hashing, Bedrock (Titan, Cohere), OpenAI embeddings |
 | Re-rank model | none, Bedrock re-rank, OpenAI-style `POST {base URL}/rerank` (Cohere, Jina, vLLM) |
+| Judge model (optional) | none, same as the LLM, Bedrock (Converse), OpenAI chat completions |
 
-Each role has a **Test** button, and **Test all** runs the three. A test sends one small real request using what is on the page, saved or not, and reports success, latency, or the provider's error. The LLM and re-rank model apply to the next question. With a re-rank model, retrieval fetches a larger pool (at least 20 passages) and keeps the best `top_k`.
+Each role has a **Test** button, and **Test all** runs every role. A test sends one small real request using what is on the page, saved or not, and reports success, latency, or the provider's error. The LLM and re-rank model apply to the next question. With a re-rank model, retrieval fetches a larger pool (at least 20 passages) and keeps the best `top_k`.
 
-Set a base URL to use Azure OpenAI, vLLM, Ollama, or any other compatible server. The OpenAI credentials card holds a default base URL and the API key. Each of the LLM, embedding, and re-rank cards can set its own base URL, so the three models can live on three servers. A blank role URL uses the default, then `OPENAI_BASE_URL`, then `https://api.openai.com/v1`. The API key is shared by all three. A server that needs no key works with only a base URL.
+Set a base URL to use Azure OpenAI, vLLM, Ollama, or any other compatible server. The OpenAI credentials card holds a default base URL and the API key. Each of the LLM, embedding, re-rank, and judge cards can set its own base URL, so the models can live on different servers. A blank role URL uses the default, then `OPENAI_BASE_URL`, then `https://api.openai.com/v1`. The API key is shared by all of them. A server that needs no key works with only a base URL.
 
 ### Credentials
 
@@ -37,9 +38,24 @@ Without saved values, the app falls back to `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACC
 
 ## Using the app
 
-The default view is a clean chat. Pick a knowledge base in the left panel and ask a short question: **Enter** sends, **Shift+Enter** adds a new line. Answers show numbered citations. Click one, or a source below the answer, to open the passage in the right-hand panel with the words from your question highlighted. Each answer notes the model, the re-rank model, the passage count, and the time. Without an LLM it lists the closest passages instead.
+The default view is a clean chat. Pick a knowledge base in the left panel and ask a short question: **Enter** sends, **Shift+Enter** adds a new line. Answers show numbered citations. Click one, or a source below the answer, to open the passage in the right-hand panel with the words from your question highlighted. Each answer notes the model, the re-rank model, the passage count, and the time, followed by thumbs up/down and, with a judge model, quality scores. Without an LLM it lists the closest passages instead.
 
-Everything else is out of the way: **Manage** (per knowledge base) holds documents, chunking, and the chunk preview; **New knowledge base**, **Models**, and **Agents (MCP)** are in the left panel. The UI follows the system light or dark setting.
+Everything else is out of the way: **Manage** (per knowledge base) holds documents, chunking, and the chunk preview; **New knowledge base**, **Quality**, **Models**, and **Agents (MCP)** are in the left panel. The UI follows the system light or dark setting.
+
+## Quality: feedback, audit, and scores
+
+Under each answer, **thumbs up/down** record a rating. A thumbs-down offers an optional reason (incorrect, incomplete, wrong sources, unclear, other) and a comment. Votes never change retrieval by themselves. They label real answers for people to review.
+
+Every answer is written to an **audit log** in `data/ragflow.db` with the question, the answer, the cited passages, the models and chunk settings used, the source (UI, MCP, or API), and the time. Feedback is append-only: changing or withdrawing a vote adds an event, so the history is kept and the latest event is the current rating. The log outlives the knowledge base it came from. Set `RAGFLOW_AUDIT_RETENTION_DAYS` to delete older answers at startup (default `0`, keep everything).
+
+With a **judge model** set on the Models page, each LLM-written answer is scored in the background, so answers are never slowed:
+
+- **Faithfulness (groundedness)**: the judge splits the answer into claims and checks each against the retrieved passages. The score is the share supported. Click the chip to see which claims are not. This is the main hallucination check.
+- **Answer relevance**: a 1 to 5 rating of how directly the answer addresses the question, shown as a percentage.
+
+Pick **Same as the LLM** for the simplest setup, or a different model for an independent check. Judge scores come from an LLM, so treat them as a screening signal and calibrate them against thumbs. They cost two extra model calls per answer.
+
+The **Quality** page (`#/quality`) shows approval rate and average scores, filters by knowledge base, rating, or low faithfulness, expands each answer to show its sources and settings, and scores older answers on demand. **Export JSONL** (full records including cited passages and feedback events) or **CSV** to build test questions or tune chunking and re-ranking. The same data is at `GET /api/audit` and `GET /api/audit/export?format=jsonl|csv`.
 
 ## Run on Cloudera AI
 
@@ -88,7 +104,8 @@ Agents call Streamable HTTP at `/mcp` on the same port as the UI.
 | --- | --- |
 | `list_knowledge_bases` | Names, chunking, nearest-neighbour settings, and the embedding model |
 | `search_knowledge_base` | Passages closest to the question |
-| `ask_knowledge_base` | A grounded answer plus those passages |
+| `ask_knowledge_base` | A grounded answer plus those passages, and an `interaction_id` |
+| `rate_answer` | Records `up`, `down`, or `none` (with an optional reason and comment) for an `interaction_id` |
 
 `ask_knowledge_base` uses the LLM from the Models page when one is set, after re-ranking if a re-rank model is set. Otherwise it returns the passages. `knowledge_base` is an id, or a name when that name is unique.
 

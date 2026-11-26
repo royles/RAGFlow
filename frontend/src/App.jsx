@@ -6,6 +6,7 @@ import Chat from "./pages/Chat"
 import Manage from "./pages/Manage"
 import Models from "./pages/Models"
 import NewKnowledgeBase from "./pages/NewKnowledgeBase"
+import Quality from "./pages/Quality"
 
 function readRoute() {
   const hash = window.location.hash.replace(/^#/, "") || "/"
@@ -16,6 +17,7 @@ function readRoute() {
   if (hash === "/new") return { name: "new" }
   if (hash === "/models") return { name: "models" }
   if (hash === "/agents") return { name: "agents" }
+  if (hash === "/quality") return { name: "quality" }
   return { name: "home" }
 }
 
@@ -72,6 +74,10 @@ export default function App() {
           {loaded && bases.length === 0 ? <p className="muted small-note">None yet</p> : null}
         </nav>
         <nav className="foot" aria-label="Settings">
+          <a href="#/quality" aria-current={route.name === "quality" ? "page" : undefined}>
+            <Icon name="gauge" size={15} />
+            <span>Quality</span>
+          </a>
           <a href="#/models" aria-current={route.name === "models" ? "page" : undefined}>
             <Icon name="cpu" size={15} />
             <span>Models</span>
@@ -97,6 +103,11 @@ export default function App() {
         {route.name === "models" ? (
           <div className="page">
             <Models />
+          </div>
+        ) : null}
+        {route.name === "quality" ? (
+          <div className="page">
+            <Quality bases={bases} />
           </div>
         ) : null}
         {route.name === "agents" ? (
