@@ -385,7 +385,7 @@ function Turn({ turn, kbId, selected, onSelect, onFollowup }) {
                   onClick={() => onSelect(index + 1)}
                 >
                   <span className="source-label">
-                    <b>{index + 1}</b> {item.filename} · chunk {item.chunk_index}
+                    <b>{index + 1}</b> {item.filename} · {item.location ? `${item.location} · ` : ""}chunk {item.chunk_index}
                   </span>
                   <span className="snippet">
                     <Highlight text={item.text} terms={terms} />
@@ -402,10 +402,13 @@ function Turn({ turn, kbId, selected, onSelect, onFollowup }) {
                   key={index}
                   className={`source${selected === index + 1 ? " active" : ""}`}
                   onClick={() => onSelect(index + 1)}
-                  title={`${item.filename}, chunk ${item.chunk_index}`}
+                  title={`${item.filename}, ${item.location ? `${item.location}, ` : ""}chunk ${item.chunk_index}`}
                 >
                   <b>{index + 1}</b>
-                  <span>{item.filename}</span>
+                  <span>
+                    {item.filename}
+                    {item.location ? <small> · {item.location}</small> : null}
+                  </span>
                 </button>
               ))}
             </div>
@@ -467,7 +470,7 @@ function Passage({ turn, n, onSelect, onClose }) {
           </p>
           <h2>{item.filename}</h2>
           <p className="muted">
-            Chunk {item.chunk_index} · {score}
+            {item.location ? `${item.location} · ` : ""}Chunk {item.chunk_index} · {score}
           </p>
         </div>
         <button type="button" className="ghost icon" onClick={onClose} aria-label="Close source">

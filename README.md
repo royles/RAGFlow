@@ -46,6 +46,8 @@ Chats are saved per knowledge base, on the server, so they survive reloads, swit
 
 Uploads show a tracker per file. After the bytes arrive it shows live indexing progress: how many chunks the file produced, how many are embedded, and how many are in the vector store (chunks go through in batches of 64). A file is all or nothing: if indexing fails part way, the chunks already stored are removed. Progress is held in memory under an id the browser sends (`X-Upload-Id`, read at `GET /api/uploads/{id}`).
 
+Every citation says where it came from: the document, and the **page** for a PDF (`p. 12`, or `pp. 12–13` when a chunk crosses a page break) or the **line** for a text, Markdown or CSV file (`line 40`, `lines 40–52`; in a CSV, line 1 is the header row). The label appears on source chips, passage cards, the passage panel, the audit log, the prompt sent to the model, and in MCP and API results as `location`, with `page_start`/`page_end` or `line_start`/`line_end`. Each stored chunk also keeps `char_start`/`char_end`. Word files have no reliable pages, so they show only the document name. Files indexed before this change have no position until they are uploaded again.
+
 Everything else is out of the way: **Manage** (per knowledge base) holds documents, chunking, and the chunk preview; **New knowledge base**, **Quality**, **Models**, and **Agents (MCP)** are in the left panel. The UI follows the system light or dark setting.
 
 ## Advanced settings

@@ -7,10 +7,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from backend import audit, chats, db, followups, google_drive, judge, model_settings, models, progress, vectors
-from backend.chunking import chunk_text
+from backend.chunking import chunk_located
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
-from backend.extract import extract_text
+from backend.extract import extract
 from backend.settings import max_chunks, max_upload_bytes, sample_path
 
 log = logging.getLogger("ragflow")
@@ -128,11 +128,12 @@ def _index(kb_id: str, filename: str, data: bytes, progress_id: str) -> dict:
     size_limit = max_upload_bytes()
     if size_limit and len(data) > size_limit:
         raise BadRequest(f"Files must be {size_limit // (1024 * 1024)} MB or smaller (RAGFLOW_MAX_UPLOAD_MB).")
-    text = extract_text(safe_name, data)
-    if not text:
+    document = extract(safe_name, data)
+    if not document.text:
         raise BadRequest("No text could be read from that file.")
     progress.update(progress_id, phase="chunking")
-    pieces = chunk_text(text, current["chunk_size"], current["chunk_overlap"])
+    located = chunk_located(document.text, current["chunk_size"], current["chunk_overlap"])
+    pieces = [piece for piece, _, _ in located]
     limit = max_chunks()
     if limit and len(pieces) > limit:
         raise BadRequest(
@@ -157,9 +158,10 @@ def _index(kb_id: str, filename: str, data: bytes, progress_id: str) -> dict:
                             "filename": safe_name,
                             "chunk_index": start + offset,
                             "text": piece,
+                            **document.locate(first, last),
                         },
                     }
-                    for offset, (piece, vector) in enumerate(zip(batch, embedded))
+                    for offset, ((piece, first, last), vector) in enumerate(zip(located[start : start + INDEX_BATCH], embedded))
                 ],
             )
             progress.update(progress_id, stored=start + len(batch))
@@ -342,7 +344,8 @@ def _prompt(question: str, citations: list[dict]) -> str:
         "",
     ]
     for index, item in enumerate(citations, start=1):
-        lines.append(f"[{index}] {item['filename']} (chunk {item['chunk_index']})")
+        place = f"{item['location']}, " if item.get("location") else ""
+        lines.append(f"[{index}] {item['filename']} ({place}chunk {item['chunk_index']})")
         lines.append(item["text"])
         lines.append("")
     lines.append(f"Question: {question}")

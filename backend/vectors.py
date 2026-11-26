@@ -22,6 +22,7 @@ from qdrant_client.models import (
 )
 
 from backend import advanced
+from backend.extract import describe
 from backend.settings import data_dir
 
 _DISTANCES = {
@@ -82,13 +83,7 @@ def search(collection: str, vector: list[float], limit: int, nn_algorithm: str) 
     for point in response.points:
         payload = point.payload or {}
         hits.append(
-            {
-                "document_id": payload.get("document_id", ""),
-                "filename": payload.get("filename", ""),
-                "chunk_index": payload.get("chunk_index", 0),
-                "text": payload.get("text", ""),
-                "score": round(float(point.score), 4),
-            }
+            {**_hit(payload), "score": round(float(point.score), 4)}
         )
     return hits
 
@@ -107,15 +102,21 @@ def neighbours(collection: str, wanted: dict[str, list[int]]) -> list[dict]:
             points, _ = _qdrant().scroll(collection_name=collection, scroll_filter=condition, limit=len(indexes), with_payload=True)
         for point in points:
             payload = point.payload or {}
-            found.append(
-                {
-                    "document_id": document_id,
-                    "filename": payload.get("filename", ""),
-                    "chunk_index": payload.get("chunk_index", 0),
-                    "text": payload.get("text", ""),
-                }
-            )
+            found.append(_hit(payload))
     return sorted(found, key=lambda item: (item["filename"], item["chunk_index"]))
+
+
+def _hit(payload: dict) -> dict:
+    """A stored chunk as the app passes it around, with where it sits in its file when known."""
+    where = {key: payload[key] for key in ("page_start", "page_end", "line_start", "line_end") if key in payload}
+    return {
+        "document_id": payload.get("document_id", ""),
+        "filename": payload.get("filename", ""),
+        "chunk_index": payload.get("chunk_index", 0),
+        "text": payload.get("text", ""),
+        **where,
+        "location": describe(where),
+    }
 
 
 def delete_document(collection: str, document_id: str) -> None:

@@ -122,7 +122,10 @@ def _prompt(item: dict, count: int, nearby: list[dict]) -> str:
         text = citation["text"][: min(MAX_PASSAGE_CHARS, max(0, MAX_PROMPT_CHARS - used))]
         used += len(text)
         passages.append(f"[{index}] {citation['filename']}: {text}")
-    sections = [f"- {c['filename']}, section {c['chunk_index']}: {c['text'][:MAX_NEARBY_CHARS]}" for c in nearby]
+    sections = [
+        f"- {c['filename']}, {c['location'] + ', ' if c.get('location') else ''}section {c['chunk_index']}: {c['text'][:MAX_NEARBY_CHARS]}"
+        for c in nearby
+    ]
     return "\n".join(
         [
             f"Suggest up to {count} short follow-up questions the user might ask next.",

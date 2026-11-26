@@ -206,7 +206,7 @@ function Row({ item, onChange, onRefresh }) {
                 {detail.citations.map((citation, index) => (
                   <li key={index}>
                     <small>
-                      {citation.filename} · chunk {citation.chunk_index}
+                      {citation.filename} · {citation.location ? `${citation.location} · ` : ""}chunk {citation.chunk_index}
                     </small>
                     <p>{citation.text}</p>
                   </li>

@@ -25,6 +25,19 @@ def chunk_spans(text: str, size: int, overlap: int) -> list[tuple[int, int]]:
     return spans
 
 
+def chunk_located(text: str, size: int, overlap: int) -> list[tuple[str, int, int]]:
+    """Like chunk_text, with each piece's (start, end) offsets in normalize(text)."""
+    cleaned = normalize(text)
+    located = []
+    for start, end in chunk_spans(cleaned, size, overlap):
+        window = cleaned[start:end]
+        piece = window.strip()
+        if piece:
+            first = start + len(window) - len(window.lstrip())
+            located.append((piece, first, first + len(piece)))
+    return located
+
+
 def chunk_text(text: str, size: int, overlap: int) -> list[str]:
     """Return the non-empty windows of `text` as stripped strings."""
     cleaned = normalize(text)
