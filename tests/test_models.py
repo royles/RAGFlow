@@ -425,16 +425,24 @@ class BedrockTests(unittest.TestCase):
 
     def test_saved_keys_are_passed_to_boto3(self):
         creds = {"region": "eu-west-1", "access_key_id": "AKIATEST", "secret_access_key": "s", "session_token": None}
-        with mock.patch("backend.bedrock.boto3.client") as make:
+        bedrock._clients.clear()
+        with mock.patch("backend.bedrock.boto3.session.Session") as session:
             mock.patch.stopall()
-            bedrock.client("bedrock-runtime", creds)
+            first = bedrock.client("bedrock-runtime", creds)
+            again = bedrock.client("bedrock-runtime", creds)
+        make = session.return_value.client
         make.assert_called_once_with(
             "bedrock-runtime",
+            config=mock.ANY,
             region_name="eu-west-1",
             aws_access_key_id="AKIATEST",
             aws_secret_access_key="s",
             aws_session_token=None,
         )
+        self.assertIs(first, again)
+        config = make.call_args.kwargs["config"]
+        self.assertGreaterEqual(config.max_pool_connections, 32)
+        bedrock._clients.clear()
 
 
 if __name__ == "__main__":

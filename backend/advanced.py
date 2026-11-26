@@ -46,6 +46,16 @@ SETTINGS = [
         "help": "Rejects a file that would produce more chunks than this. 0 means no limit. Every chunk is embedded, so huge files can run into the platform's request timeout.",
     },
     {
+        "key": "embed_workers",
+        "env": "RAGFLOW_EMBED_WORKERS",
+        "group": "Uploads and indexing",
+        "label": "Parallel embedding requests",
+        "type": "int",
+        "max": 64,
+        "default": 8,
+        "help": "How many batches of chunks are embedded at the same time, across all files being indexed. Higher is faster until the embedding service starts throttling (then lower it). 1 embeds one batch at a time. Large files benefit most.",
+    },
+    {
         "key": "followup_count",
         "env": "RAGFLOW_FOLLOWUP_QUESTIONS",
         "group": "Answers",

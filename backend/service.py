@@ -1,12 +1,13 @@
 """Knowledge base operations shared by the REST API and the MCP tools."""
 
 import logging
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import audit, chats, db, followups, google_drive, judge, model_settings, models, progress, vectors
+from backend import audit, bedrock, chats, db, followups, google_drive, indexing, judge, model_settings, models, progress, vectors
 from backend.chunking import chunk_located
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
@@ -106,6 +107,12 @@ def list_documents(kb_id: str) -> list[dict]:
 INDEX_BATCH = 64
 
 
+def _batch_size(current: dict) -> int:
+    if current["embed_provider"] == "bedrock":
+        return bedrock.batch_size(current["embed_model"])
+    return INDEX_BATCH
+
+
 def add_document(kb_id: str, filename: str, data: bytes, progress_id: str = "") -> dict:
     """Read, chunk, embed, and store one file.
 
@@ -142,29 +149,43 @@ def _index(kb_id: str, filename: str, data: bytes, progress_id: str) -> dict:
         )
     progress.update(progress_id, phase="embedding", chunks=len(pieces))
     document_id = str(uuid.uuid4())
-    try:
-        for start in range(0, len(pieces), INDEX_BATCH):
-            batch = pieces[start : start + INDEX_BATCH]
-            embedded = embed(current["embed_provider"], current["embed_model"], current["embed_dim"], batch, "document")
-            progress.update(progress_id, embedded=start + len(batch))
-            vectors.upsert(
-                current["collection"],
-                [
-                    {
-                        "id": str(uuid.uuid4()),
-                        "vector": vector,
-                        "payload": {
-                            "document_id": document_id,
-                            "filename": safe_name,
-                            "chunk_index": start + offset,
-                            "text": piece,
-                            **document.locate(first, last),
-                        },
-                    }
-                    for offset, ((piece, first, last), vector) in enumerate(zip(located[start : start + INDEX_BATCH], embedded))
-                ],
+    size = _batch_size(current)
+    batches = [(start, located[start : start + size]) for start in range(0, len(located), size)]
+    totals = {"embedded": 0, "stored": 0}
+    lock = threading.Lock()
+
+    def index_batch(batch):
+        start, items = batch
+        with indexing.slot():
+            embedded = embed(
+                current["embed_provider"], current["embed_model"], current["embed_dim"], [piece for piece, _, _ in items], "document"
             )
-            progress.update(progress_id, stored=start + len(batch))
+        with lock:
+            totals["embedded"] += len(items)
+            progress.update(progress_id, embedded=totals["embedded"])
+        vectors.upsert(
+            current["collection"],
+            [
+                {
+                    "id": str(uuid.uuid4()),
+                    "vector": vector,
+                    "payload": {
+                        "document_id": document_id,
+                        "filename": safe_name,
+                        "chunk_index": start + offset,
+                        "text": piece,
+                        **document.locate(first, last),
+                    },
+                }
+                for offset, ((piece, first, last), vector) in enumerate(zip(items, embedded))
+            ],
+        )
+        with lock:
+            totals["stored"] += len(items)
+            progress.update(progress_id, stored=totals["stored"])
+
+    try:
+        indexing.run(batches, index_batch)
         row = {
             "id": document_id,
             "kb_id": kb_id,

@@ -7,14 +7,20 @@ variables are ignored so an empty prototype form does not hide the role.
 
 import json
 import os
+import threading
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 from backend.errors import BadRequest
 
 _PROFILE_PREFIXES = ("us", "eu", "apac", "jp", "au", "ca", "global", "us-gov")
 _BLANK_KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
+
+
+_clients: dict = {}
+_clients_lock = threading.Lock()
 
 
 def client(service: str, creds: dict):
@@ -26,15 +32,35 @@ def client(service: str, creds: dict):
         kwargs["aws_access_key_id"] = creds["access_key_id"]
         kwargs["aws_secret_access_key"] = creds["secret_access_key"]
         kwargs["aws_session_token"] = creds.get("session_token")
-    return boto3.client(service, **kwargs)
+    key = (service, *sorted((name, str(value)) for name, value in kwargs.items()))
+    with _clients_lock:
+        if key not in _clients:
+            if len(_clients) >= 16:
+                _clients.clear()
+            # Clients are safe to share between threads; sessions are not, so each gets its own.
+            config = Config(max_pool_connections=64, retries={"max_attempts": 8, "mode": "adaptive"})
+            _clients[key] = boto3.session.Session().client(service, config=config, **kwargs)
+        return _clients[key]
 
 
-def embedding_request(model: str, text: str, dim: int, purpose: str) -> dict:
-    """Body for the Bedrock embedding models this app knows how to call."""
+COHERE_BATCH = 96  # the most texts one Cohere Embed request accepts
+SINGLE_BATCH = 8  # Titan takes one text per request, so small batches keep every thread busy
+
+
+def batch_size(model: str) -> int:
+    """How many chunks to hand to embed_texts at a time."""
+    return COHERE_BATCH if "cohere.embed" in model else SINGLE_BATCH
+
+
+def embedding_request(model: str, text: str | list[str], dim: int, purpose: str) -> dict:
+    """Body for the Bedrock embedding models this app knows how to call.
+
+    Cohere Embed takes a list of texts in one request; Titan takes a single text.
+    """
     if "cohere.embed" in model:
         input_type = "search_query" if purpose == "query" else "search_document"
         return {
-            "texts": [text],
+            "texts": text if isinstance(text, list) else [text],
             "input_type": input_type,
             "embedding_types": ["float"],
         }
@@ -50,16 +76,21 @@ def embedding_request(model: str, text: str, dim: int, purpose: str) -> dict:
 def embed_texts(creds: dict, model: str, texts: list[str], dim: int, purpose: str) -> list[list[float]]:
     runtime = client("bedrock-runtime", creds)
     vectors: list[list[float]] = []
-    for text in texts:
-        body = embedding_request(model, text, dim, purpose)
+    step = COHERE_BATCH if "cohere.embed" in model else 1
+    for start in range(0, len(texts), step):
+        group = texts[start : start + step]
+        body = embedding_request(model, group if step > 1 else group[0], dim, purpose)
         try:
             response = runtime.invoke_model(modelId=model, body=json.dumps(body))
         except (BotoCoreError, ClientError) as exc:
             raise BadRequest(f"Amazon Bedrock rejected the embedding request: {exc}{_profile_hint(exc, model)}") from exc
-        vector = _read_vector(json.loads(response["body"].read()))
-        if len(vector) != dim:
-            raise BadRequest(f"{model} returned {len(vector)} dimensions, but {dim} are configured.")
-        vectors.append(vector)
+        rows = _read_vectors(json.loads(response["body"].read()))
+        if len(rows) != len(group):
+            raise BadRequest(f"{model} returned {len(rows)} embeddings for {len(group)} texts.")
+        for vector in rows:
+            if len(vector) != dim:
+                raise BadRequest(f"{model} returned {len(vector)} dimensions, but {dim} are configured.")
+        vectors.extend(rows)
     return vectors
 
 
@@ -130,14 +161,16 @@ def _rerank_hint(exc: Exception, region: str) -> str:
     )
 
 
-def _read_vector(payload: dict) -> list[float]:
+def _read_vectors(payload: dict) -> list[list[float]]:
     if isinstance(payload.get("embedding"), list):
-        return [float(value) for value in payload["embedding"]]
+        return [[float(value) for value in payload["embedding"]]]
     embeddings = payload.get("embeddings")
     if isinstance(embeddings, dict):
-        rows = embeddings.get("float") or []
-        if rows:
-            return [float(value) for value in rows[0]]
+        embeddings = embeddings.get("float")
     if isinstance(embeddings, list) and embeddings and isinstance(embeddings[0], list):
-        return [float(value) for value in embeddings[0]]
+        return [[float(value) for value in row] for row in embeddings]
     raise BadRequest("Amazon Bedrock returned an embedding response this app could not read.")
+
+
+def _read_vector(payload: dict) -> list[float]:
+    return _read_vectors(payload)[0]

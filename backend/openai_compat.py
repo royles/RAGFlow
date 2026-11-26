@@ -16,7 +16,7 @@ DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 
 def _client(creds: dict) -> OpenAI:
-    return OpenAI(api_key=creds["api_key"], base_url=creds["base_url"], timeout=60, max_retries=1)
+    return OpenAI(api_key=creds["api_key"], base_url=creds["base_url"], timeout=60, max_retries=4)
 
 
 def embed_texts(creds: dict, model: str, texts: list[str], dim: int, purpose: str) -> list[list[float]]:
