@@ -4,6 +4,7 @@ import { Field } from "./Library"
 
 export default function KnowledgeBase({ id }) {
   const [catalog, setCatalog] = useState(null)
+  const [models, setModels] = useState(null)
   const [kb, setKb] = useState(null)
   const [documents, setDocuments] = useState([])
   const [form, setForm] = useState(null)
@@ -14,23 +15,22 @@ export default function KnowledgeBase({ id }) {
   const [busy, setBusy] = useState("")
 
   async function reload() {
-    const [nextKb, nextDocs, nextCatalog] = await Promise.all([
+    const [nextKb, nextDocs, nextCatalog, nextModels] = await Promise.all([
       api.getKnowledgeBase(id),
       api.listDocuments(id),
       api.catalog(),
+      api.getModels(),
     ])
     setKb(nextKb)
     setDocuments(nextDocs.documents)
     setCatalog(nextCatalog)
+    setModels(nextModels)
     setForm({
       name: nextKb.name,
       description: nextKb.description,
       chunk_size: nextKb.chunk_size,
       chunk_overlap: nextKb.chunk_overlap,
       nn_algorithm: nextKb.nn_algorithm,
-      chat_preset: nextKb.chat_preset,
-      chat_model: nextKb.chat_model,
-      bedrock_region: nextKb.bedrock_region,
     })
   }
 
@@ -138,12 +138,9 @@ export default function KnowledgeBase({ id }) {
     }
   }
 
-  if (!kb || !form || !catalog) {
+  if (!kb || !form || !catalog || !models) {
     return <main className="layout single">{error ? <p className="banner">{error}</p> : <p>Loading…</p>}</main>
   }
-
-  const chatUsesBedrock = form.chat_preset !== "none"
-  const showRegion = chatUsesBedrock || kb.embed_provider === "bedrock"
 
   return (
     <main className="workspace">
@@ -154,7 +151,10 @@ export default function KnowledgeBase({ id }) {
         <h1>{kb.name}</h1>
         <p className="meta">
           {kb.distance} · {kb.nn_algorithm} · {kb.embed_model}
-          {kb.chat_model ? ` · ${kb.chat_model}` : " · retrieval only"}
+        </p>
+        <p className="meta">
+          Answers: {models.llm.provider === "none" ? "retrieval only" : `${models.llm.model} (${models.llm.provider})`}
+          {models.rerank.provider === "none" ? "" : ` · re-rank ${models.rerank.model}`} · <a href="#/models">Models</a>
         </p>
       </div>
       {error ? <p className="banner">{error}</p> : null}
@@ -206,21 +206,23 @@ export default function KnowledgeBase({ id }) {
             {thread.map((turn, index) => (
               <article key={index}>
                 <h3>{turn.question}</h3>
-                <p className="mode">{turn.mode === "bedrock" ? "Answered with Amazon Bedrock" : "Grounded in retrieved passages"}</p>
+                <p className="mode">
+                  {turn.mode === "llm" ? `Answered with ${turn.llm.provider} · ${turn.llm.model}` : "Grounded in retrieved passages"}
+                </p>
                 <p className="answer">{turn.answer}</p>
                 {turn.citations?.length ? (
                   <p className="hint">
                     {turn.citations
-                      .map((item) => `${item.filename} · chunk ${item.chunk_index} · score ${item.score}`)
+                      .map((item) => `${item.filename} · chunk ${item.chunk_index} · ${scoreText(item)}`)
                       .join("  ")}
                   </p>
                 ) : null}
-                {turn.mode === "bedrock" && turn.citations?.length ? (
+                {turn.mode === "llm" && turn.citations?.length ? (
                   <ol className="citations">
                     {turn.citations.map((item, citationIndex) => (
                       <li key={citationIndex}>
                         <strong>
-                          {item.filename} · chunk {item.chunk_index} · {item.score}
+                          {item.filename} · chunk {item.chunk_index} · {scoreText(item)}
                         </strong>
                         <span>{item.text}</span>
                       </li>
@@ -260,25 +262,6 @@ export default function KnowledgeBase({ id }) {
             <input name="chunk_overlap" type="number" min={0} value={form.chunk_overlap} onChange={update} />
           </Field>
         </div>
-        <Field label="Chat model">
-          <select name="chat_preset" value={form.chat_preset} onChange={update}>
-            {catalog.chat_presets.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {form.chat_preset === "custom" ? (
-          <Field label="Bedrock chat model id">
-            <input name="chat_model" value={form.chat_model} onChange={update} />
-          </Field>
-        ) : null}
-        {showRegion ? (
-          <Field label="AWS region">
-            <input name="bedrock_region" value={form.bedrock_region} onChange={update} />
-          </Field>
-        ) : null}
         <p className="hint">
           Index: {kb.distance}, {kb.embed_dim} dimensions, {kb.embed_model}.
         </p>
@@ -293,4 +276,8 @@ export default function KnowledgeBase({ id }) {
       </form>
     </main>
   )
+}
+
+function scoreText(item) {
+  return item.rerank_score === undefined ? `score ${item.score}` : `re-rank ${item.rerank_score}`
 }

@@ -17,10 +17,10 @@ _KB_COLUMNS = (
     "chunk_size",
     "chunk_overlap",
     "nn_algorithm",
-    "chat_provider",
-    "chat_model",
-    "bedrock_region",
 )
+
+# Chat and region moved to the global model settings.
+_LEGACY_COLUMNS = ("chat_provider", "chat_model", "bedrock_region")
 
 
 @contextmanager
@@ -54,9 +54,6 @@ def _init(conn: sqlite3.Connection) -> None:
             embed_provider TEXT NOT NULL,
             embed_model TEXT NOT NULL,
             embed_dim INTEGER NOT NULL,
-            chat_provider TEXT NOT NULL,
-            chat_model TEXT NOT NULL,
-            bedrock_region TEXT NOT NULL,
             collection TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
@@ -71,6 +68,10 @@ def _init(conn: sqlite3.Connection) -> None:
         );
         """
     )
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(knowledge_bases)")}
+    for column in _LEGACY_COLUMNS:
+        if column in existing:
+            conn.execute(f"ALTER TABLE knowledge_bases DROP COLUMN {column}")
 
 
 def insert_kb(row: dict[str, Any]) -> None:

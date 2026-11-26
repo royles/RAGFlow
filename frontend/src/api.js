@@ -25,6 +25,10 @@ function errorMessage(body, fallback) {
 export const api = {
   catalog: () => request("/api/catalog"),
   agent: () => request("/api/agent"),
+  getModels: () => request("/api/models"),
+  saveModels: (payload) => request("/api/models", { method: "PUT", body: JSON.stringify(payload) }),
+  testModel: (role, settings) =>
+    request("/api/models/test", { method: "POST", body: JSON.stringify({ role, settings }) }),
   listKnowledgeBases: () => request("/api/knowledge-bases"),
   createKnowledgeBase: (payload) =>
     request("/api/knowledge-bases", { method: "POST", body: JSON.stringify(payload) }),

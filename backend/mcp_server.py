@@ -71,7 +71,7 @@ def _guard(func):
 
 @mcp.tool()
 def list_knowledge_bases() -> dict:
-    """List knowledge bases, including chunking, nearest-neighbour settings, and model ids."""
+    """List knowledge bases, including chunking, nearest-neighbour settings, and the embedding model."""
     return {"knowledge_bases": service.list_knowledge_bases()}
 
 
@@ -89,8 +89,10 @@ def search_knowledge_base(knowledge_base: str, question: str, top_k: int = 5) ->
 def ask_knowledge_base(knowledge_base: str, question: str, top_k: int = 5) -> dict:
     """Answer a question from one knowledge base, grounded in retrieved passages.
 
-    When the knowledge base has a Bedrock chat model, that model writes the
-    answer and is told to use only the passages. Otherwise the passages
-    themselves are returned. knowledge_base is an id or a unique name.
+    When an LLM is configured in RAGFlow's Models settings (AWS Bedrock or an
+    OpenAI-compatible API), that model writes the answer and is told to use
+    only the passages. Otherwise the passages themselves are returned. A
+    configured re-rank model reorders the passages first. knowledge_base is an
+    id or a unique name.
     """
     return _guard(lambda: service.ask(knowledge_base, question, top_k))

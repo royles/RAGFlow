@@ -8,30 +8,26 @@ const EMPTY = {
   chunk_overlap: 120,
   distance: "cosine",
   nn_algorithm: "hnsw",
-  embed_preset: "local",
-  embed_model: "",
-  embed_dim: 1024,
-  chat_preset: "none",
-  chat_model: "",
-  bedrock_region: "us-east-1",
 }
 
 export default function Library() {
   const [catalog, setCatalog] = useState(null)
   const [bases, setBases] = useState([])
   const [agent, setAgent] = useState(null)
+  const [models, setModels] = useState(null)
   const [form, setForm] = useState(EMPTY)
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     let active = true
-    Promise.all([api.catalog(), api.listKnowledgeBases(), api.agent()])
-      .then(([nextCatalog, nextBases, nextAgent]) => {
+    Promise.all([api.catalog(), api.listKnowledgeBases(), api.agent(), api.getModels()])
+      .then(([nextCatalog, nextBases, nextAgent, nextModels]) => {
         if (!active) return
         setCatalog(nextCatalog)
         setBases(nextBases.knowledge_bases)
         setAgent(nextAgent)
+        setModels(nextModels)
         setForm((current) => ({ ...current, ...nextCatalog.defaults }))
       })
       .catch((err) => active && setError(err.message))
@@ -53,7 +49,6 @@ export default function Library() {
       ...form,
       chunk_size: Number(form.chunk_size),
       chunk_overlap: Number(form.chunk_overlap),
-      embed_dim: form.embed_preset === "custom" ? Number(form.embed_dim) : undefined,
     }
     try {
       const created = await api.createKnowledgeBase(payload)
@@ -64,16 +59,12 @@ export default function Library() {
     }
   }
 
-  const embed = catalog?.embed_presets.find((item) => item.id === form.embed_preset)
-  const chat = catalog?.chat_presets.find((item) => item.id === form.chat_preset)
-  const usesBedrock = embed?.provider === "bedrock" || chat?.provider === "bedrock"
-
   return (
     <main className="layout">
       <section>
         <div className="section-head">
           <h1>Knowledge bases</h1>
-          <p>Each base has its own chunking, Qdrant index, and models.</p>
+          <p>Each base has its own chunking and Qdrant index. Models are set on the Models page.</p>
         </div>
         {error ? <p className="banner">{error}</p> : null}
         {bases.length === 0 ? (
@@ -135,49 +126,22 @@ export default function Library() {
             </select>
           </Field>
         </div>
-        <Field label="Embedding model" hint="Fixed when the base is created, because it sets the Qdrant vector size.">
-          <select name="embed_preset" value={form.embed_preset} onChange={update}>
-            {(catalog?.embed_presets || []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {form.embed_preset === "custom" ? (
-          <div className="split">
-            <Field label="Bedrock embedding model id">
-              <input name="embed_model" value={form.embed_model} onChange={update} placeholder="amazon.titan-embed-text-v2:0" />
-            </Field>
-            <Field label="Dimensions">
-              <input name="embed_dim" type="number" min={8} max={4096} value={form.embed_dim} onChange={update} />
-            </Field>
-          </div>
-        ) : null}
-        <Field label="Chat model" hint="Retrieval only shows the passages. A Bedrock model writes the answer.">
-          <select name="chat_preset" value={form.chat_preset} onChange={update}>
-            {(catalog?.chat_presets || []).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-        {form.chat_preset === "custom" ? (
-          <Field label="Bedrock chat model id">
-            <input name="chat_model" value={form.chat_model} onChange={update} placeholder="anthropic.claude-haiku-4-5-20251001-v1:0" />
-          </Field>
-        ) : null}
-        {usesBedrock ? (
-          <Field label="AWS region" hint="The region where these models are enabled.">
-            <input name="bedrock_region" value={form.bedrock_region} onChange={update} />
-          </Field>
-        ) : null}
+        {models ? <EmbeddingNote embedding={models.embedding} /> : null}
         <button type="submit" disabled={busy || !catalog}>
           {busy ? "Creating…" : "Create knowledge base"}
         </button>
       </form>
     </main>
+  )
+}
+
+function EmbeddingNote({ embedding }) {
+  const label = embedding.provider === "local" ? "the built-in local embedder" : `${embedding.model} (${embedding.provider})`
+  return (
+    <p className="note">
+      This base will embed with {label}, {embedding.dimensions} dimensions. The choice is fixed once the base is
+      created. Change it on the <a href="#/models">Models</a> page first.
+    </p>
   )
 }
 

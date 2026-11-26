@@ -1,22 +1,31 @@
 """Turn text into vectors.
 
 The local embedder is a hashed bag of words. It is deterministic and needs no
-network, which makes the app usable before Bedrock is configured. It matches
-shared words; it does not understand paraphrases. Bedrock embedding models do.
+network, which makes the app usable before a provider is configured. It matches
+shared words; it does not understand paraphrases. Bedrock and OpenAI embedding
+models do.
 """
 
 import hashlib
 import math
 import re
 
-from backend.bedrock import embed_texts as bedrock_embed
-from backend.catalog import LOCAL_DIM
+from backend import bedrock, model_settings, openai_compat
+from backend.errors import BadRequest
+
+LOCAL_DIM = model_settings.LOCAL_DIM
 
 
-def embed(provider: str, model: str, dim: int, region: str, texts: list[str], purpose: str) -> list[list[float]]:
+def embed(provider: str, model: str, dim: int, texts: list[str], purpose: str, cfg: dict | None = None) -> list[list[float]]:
+    """Embed `texts`. `purpose` is "document" or "query"; some models treat them differently."""
     if provider == "local":
         return [local_embed(text) for text in texts]
-    return bedrock_embed(model, texts, dim, region, purpose)
+    cfg = cfg or model_settings.load()
+    if provider == "bedrock":
+        return bedrock.embed_texts(model_settings.bedrock_credentials(cfg), model, texts, dim, purpose)
+    if provider == "openai":
+        return openai_compat.embed_texts(model_settings.openai_credentials(cfg), model, texts, dim, purpose)
+    raise BadRequest(f"Unknown embedding provider {provider!r}.")
 
 
 def local_embed(text: str) -> list[float]:

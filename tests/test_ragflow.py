@@ -3,14 +3,11 @@
 import asyncio
 import json
 import os
-import socket
 import tempfile
-import threading
 import unittest
 from pathlib import Path
 
 import httpx
-import uvicorn
 from docx import Document
 
 os.environ.setdefault("RAGFLOW_DATA_DIR", tempfile.mkdtemp(prefix="ragflow-import-"))
@@ -18,14 +15,8 @@ os.environ.setdefault("RAGFLOW_DATA_DIR", tempfile.mkdtemp(prefix="ragflow-impor
 from backend.bedrock import embedding_request
 from backend.chunking import chunk_text
 from backend.embeddings import local_embed
-from backend.main import app
 from backend.vectors import close_client
-
-
-def _free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+from tests.helpers import shared_app_server
 
 
 class ChunkTests(unittest.TestCase):
@@ -60,24 +51,7 @@ class EmbeddingTests(unittest.TestCase):
 class AppTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.port = _free_port()
-        cls.server = uvicorn.Server(
-            uvicorn.Config(app, host="127.0.0.1", port=cls.port, log_level="warning")
-        )
-        cls.thread = threading.Thread(target=cls.server.run, daemon=True)
-        cls.thread.start()
-        deadline = 0
-        while not cls.server.started and deadline < 50:
-            deadline += 1
-            cls.thread.join(0.1)
-        if not cls.server.started:
-            raise RuntimeError("RAGFlow did not start")
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.server.should_exit = True
-        cls.thread.join(5)
-        close_client()
+        cls.port = shared_app_server().port
 
     def setUp(self):
         close_client()
@@ -156,7 +130,7 @@ class AppTests(unittest.TestCase):
         created = self._create("Editable")
         updated = self.http.patch(
             f"/api/knowledge-bases/{created['id']}",
-            json={"chunk_size": 500, "chunk_overlap": 40, "nn_algorithm": "exact", "chat_preset": "none"},
+            json={"chunk_size": 500, "chunk_overlap": 40, "nn_algorithm": "exact"},
         )
         self.assertEqual(updated.status_code, 200, updated.text)
         body = updated.json()
@@ -193,7 +167,7 @@ class AppTests(unittest.TestCase):
         self.assertIn("DUB-14", _tool_text(result))
 
     def _create(self, name: str, **extra) -> dict:
-        payload = {"name": name, "embed_preset": "local", "chat_preset": "none"}
+        payload = {"name": name}
         payload.update(extra)
         response = self.http.post("/api/knowledge-bases", json=payload)
         self.assertEqual(response.status_code, 201, response.text)

@@ -35,7 +35,15 @@ environment_variables:
     required: false
   AWS_REGION:
     default: "us-east-1"
-    description: Default AWS region when a knowledge base does not set one.
+    description: Default AWS region when the Models page does not set one.
+    required: false
+  OPENAI_API_KEY:
+    default: ""
+    description: Optional fallback API key for the OpenAI client API. The Models page can set one instead.
+    required: false
+  OPENAI_BASE_URL:
+    default: ""
+    description: Optional fallback base URL for an OpenAI-compatible server. Leave empty for api.openai.com.
     required: false
   RAGFLOW_MCP_ALLOWED_HOSTS:
     default: ""

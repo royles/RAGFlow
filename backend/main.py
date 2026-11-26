@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from backend import service
+from backend import model_settings, model_test, service
 from backend.catalog import public_catalog
 from backend.errors import BadRequest, NotFound
 from backend.mcp_server import mcp, transport_security
@@ -56,6 +56,21 @@ def health() -> dict:
 @app.get("/api/catalog")
 def catalog() -> dict:
     return public_catalog()
+
+
+@app.get("/api/models")
+def get_models() -> dict:
+    return model_settings.public(model_settings.load())
+
+
+@app.put("/api/models")
+def put_models(payload: dict) -> dict:
+    return _call(lambda: model_settings.save_update(payload))
+
+
+@app.post("/api/models/test")
+def test_model(payload: dict) -> dict:
+    return _call(lambda: model_test.run(str(payload.get("role") or ""), payload.get("settings") or {}))
 
 
 @app.get("/api/agent")

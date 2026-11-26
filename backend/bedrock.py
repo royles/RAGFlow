@@ -1,8 +1,8 @@
-"""Amazon Bedrock embeddings and chat.
+"""Amazon Bedrock: embeddings, chat (Converse), and re-ranking.
 
-Credentials come from the normal AWS chain: an access key in the environment,
-or the Cloudera AI runtime role. Blank key variables are ignored so an empty
-prototype form does not override the role.
+Saved keys are used when present. Otherwise boto3 falls back to its normal
+chain: environment variables, then the Cloudera AI runtime role. Blank key
+variables are ignored so an empty prototype form does not hide the role.
 """
 
 import json
@@ -14,6 +14,18 @@ from botocore.exceptions import BotoCoreError, ClientError
 from backend.errors import BadRequest
 
 _BLANK_KEYS = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN")
+
+
+def client(service: str, creds: dict):
+    for name in _BLANK_KEYS:
+        if os.environ.get(name, "").strip() == "":
+            os.environ.pop(name, None)
+    kwargs = {"region_name": creds["region"]}
+    if creds.get("access_key_id"):
+        kwargs["aws_access_key_id"] = creds["access_key_id"]
+        kwargs["aws_secret_access_key"] = creds["secret_access_key"]
+        kwargs["aws_session_token"] = creds.get("session_token")
+    return boto3.client(service, **kwargs)
 
 
 def embedding_request(model: str, text: str, dim: int, purpose: str) -> dict:
@@ -30,35 +42,31 @@ def embedding_request(model: str, text: str, dim: int, purpose: str) -> dict:
     if "titan-embed" in model:
         return {"inputText": text}
     raise BadRequest(
-        "This embedding model is not supported. "
-        "Use Titan Embeddings, Cohere Embed, or the local embedder."
+        "This Bedrock embedding model is not supported. Use Titan Embeddings or Cohere Embed."
     )
 
 
-def embed_texts(model: str, texts: list[str], dim: int, region: str, purpose: str) -> list[list[float]]:
-    client = _client(region)
+def embed_texts(creds: dict, model: str, texts: list[str], dim: int, purpose: str) -> list[list[float]]:
+    runtime = client("bedrock-runtime", creds)
     vectors: list[list[float]] = []
     for text in texts:
         body = embedding_request(model, text, dim, purpose)
         try:
-            response = client.invoke_model(modelId=model, body=json.dumps(body))
+            response = runtime.invoke_model(modelId=model, body=json.dumps(body))
         except (BotoCoreError, ClientError) as exc:
             raise BadRequest(f"Amazon Bedrock rejected the embedding request: {exc}") from exc
-        payload = json.loads(response["body"].read())
-        vector = _read_vector(payload)
+        vector = _read_vector(json.loads(response["body"].read()))
         if len(vector) != dim:
-            raise BadRequest(
-                f"{model} returned {len(vector)} dimensions, but this knowledge base uses {dim}."
-            )
+            raise BadRequest(f"{model} returned {len(vector)} dimensions, but {dim} are configured.")
         vectors.append(vector)
     return vectors
 
 
-def complete(model: str, region: str, prompt: str) -> str:
-    """Ask a Bedrock chat model to answer. Converse works across Claude, Nova, and Llama."""
-    client = _client(region)
+def converse(creds: dict, model: str, prompt: str) -> str:
+    """Converse works across Claude, Nova, and Llama models."""
+    runtime = client("bedrock-runtime", creds)
     try:
-        response = client.converse(
+        response = runtime.converse(
             modelId=model,
             messages=[{"role": "user", "content": [{"text": prompt}]}],
             inferenceConfig={"maxTokens": 800, "temperature": 0.2},
@@ -72,11 +80,31 @@ def complete(model: str, region: str, prompt: str) -> str:
     return text
 
 
-def _client(region: str):
-    for name in _BLANK_KEYS:
-        if os.environ.get(name, "").strip() == "":
-            os.environ.pop(name, None)
-    return boto3.client("bedrock-runtime", region_name=region)
+def rerank(creds: dict, model: str, query: str, documents: list[str], top_n: int) -> list[tuple[int, float]]:
+    """Return (document index, relevance score), best first."""
+    agent = client("bedrock-agent-runtime", creds)
+    arn = model if model.startswith("arn:") else f"arn:aws:bedrock:{creds['region']}::foundation-model/{model}"
+    try:
+        response = agent.rerank(
+            queries=[{"type": "TEXT", "textQuery": {"text": query}}],
+            sources=[
+                {
+                    "type": "INLINE",
+                    "inlineDocumentSource": {"type": "TEXT", "textDocument": {"text": document}},
+                }
+                for document in documents
+            ],
+            rerankingConfiguration={
+                "type": "BEDROCK_RERANKING_MODEL",
+                "bedrockRerankingConfiguration": {
+                    "modelConfiguration": {"modelArn": arn},
+                    "numberOfResults": min(top_n, len(documents)),
+                },
+            },
+        )
+    except (BotoCoreError, ClientError) as exc:
+        raise BadRequest(f"Amazon Bedrock rejected the re-rank request: {exc}") from exc
+    return [(int(row["index"]), float(row["relevanceScore"])) for row in response["results"]]
 
 
 def _read_vector(payload: dict) -> list[float]:

@@ -1,14 +1,11 @@
 """Knowledge base operations shared by the REST API and the MCP tools."""
 
 import logging
-import os
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from backend import db, vectors
-from backend.bedrock import complete
-from backend.catalog import CHAT_PRESETS, EMBED_PRESETS
+from backend import db, model_settings, models, vectors
 from backend.chunking import chunk_text
 from backend.embeddings import embed
 from backend.errors import BadRequest, NotFound
@@ -19,19 +16,22 @@ log = logging.getLogger("ragflow")
 
 MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 MAX_CHUNKS = 400
+MAX_RERANK_POOL = 100
 _DISTANCES = {"cosine", "euclid", "dot"}
 _ALGORITHMS = {"hnsw", "exact"}
 
 
 def list_knowledge_bases() -> list[dict]:
-    return [_public(row) for row in db.list_kbs()]
+    return db.list_kbs()
 
 
 def get_knowledge_base(kb_id: str) -> dict:
-    return _public(_require(kb_id))
+    return _require(kb_id)
 
 
 def create_knowledge_base(payload: dict) -> dict:
+    """Create a base. It keeps the embedding model configured right now,
+    because the model sets the size of every vector in its Qdrant collection."""
     name = _name(payload.get("name", ""))
     description = str(payload.get("description") or "").strip()
     if len(description) > 500:
@@ -40,16 +40,8 @@ def create_knowledge_base(payload: dict) -> dict:
     distance = str(payload.get("distance") or "cosine")
     algorithm = str(payload.get("nn_algorithm") or "hnsw")
     _check_index(distance, algorithm)
-    provider, model, dim = _embed_choice(
-        str(payload.get("embed_preset") or "local"),
-        str(payload.get("embed_model") or ""),
-        payload.get("embed_dim"),
-    )
-    chat_provider, chat_model = _chat_choice(
-        str(payload.get("chat_preset") or "none"),
-        str(payload.get("chat_model") or ""),
-    )
-    region = _region(str(payload.get("bedrock_region") or ""))
+    embedding = model_settings.load()["embedding"]
+    dim = int(embedding["dimensions"])
     kb_id = str(uuid.uuid4())
     collection = "kb" + kb_id.replace("-", "")
     vectors.create_collection(collection, dim, distance)
@@ -63,12 +55,9 @@ def create_knowledge_base(payload: dict) -> dict:
                 "chunk_overlap": chunk_overlap,
                 "nn_algorithm": algorithm,
                 "distance": distance,
-                "embed_provider": provider,
-                "embed_model": model,
+                "embed_provider": embedding["provider"],
+                "embed_model": embedding["model"],
                 "embed_dim": dim,
-                "chat_provider": chat_provider,
-                "chat_model": chat_model,
-                "bedrock_region": region,
                 "collection": collection,
                 "created_at": _now(),
             }
@@ -76,10 +65,7 @@ def create_knowledge_base(payload: dict) -> dict:
     except Exception:
         vectors.drop_collection(collection)
         raise
-    created = db.get_kb(kb_id)
-    if created is None:
-        raise NotFound("The knowledge base was not saved.")
-    return _public(created)
+    return _require(kb_id)
 
 
 def update_knowledge_base(kb_id: str, payload: dict) -> dict:
@@ -100,20 +86,8 @@ def update_knowledge_base(kb_id: str, payload: dict) -> dict:
         algorithm = str(payload.get("nn_algorithm") or "")
         _check_index(current["distance"], algorithm)
         fields["nn_algorithm"] = algorithm
-    if "chat_preset" in payload or "chat_model" in payload:
-        provider, model = _chat_choice(
-            str(payload.get("chat_preset") or "custom"),
-            str(payload.get("chat_model") or ""),
-        )
-        fields["chat_provider"] = provider
-        fields["chat_model"] = model
-    if "bedrock_region" in payload:
-        fields["bedrock_region"] = _region(str(payload.get("bedrock_region") or ""))
     db.update_kb(kb_id, fields)
-    updated = db.get_kb(kb_id)
-    if updated is None:
-        raise NotFound("Knowledge base not found.")
-    return _public(updated)
+    return _require(kb_id)
 
 
 def delete_knowledge_base(kb_id: str) -> None:
@@ -144,12 +118,7 @@ def add_document(kb_id: str, filename: str, data: bytes) -> dict:
     if len(pieces) > MAX_CHUNKS:
         raise BadRequest(f"That file produced {len(pieces)} chunks. The limit is {MAX_CHUNKS}.")
     vectors_batch = embed(
-        current["embed_provider"],
-        current["embed_model"],
-        current["embed_dim"],
-        current["bedrock_region"],
-        pieces,
-        "document",
+        current["embed_provider"], current["embed_model"], current["embed_dim"], pieces, "document"
     )
     document_id = str(uuid.uuid4())
     points = []
@@ -200,46 +169,39 @@ def delete_document(kb_id: str, document_id: str) -> None:
 def search(name_or_id: str, question: str, top_k: int = 5) -> dict:
     """Return the passages closest to the question, with no generated answer."""
     current = resolve(name_or_id)
-    hits = _retrieve(current, question, top_k)
+    hits = _retrieve(current, question, top_k, model_settings.load())
     return {"knowledge_base": _brief(current), "citations": hits}
 
 
 def ask(name_or_id: str, question: str, top_k: int = 5) -> dict:
     """Answer from retrieved passages.
 
-    With a Bedrock chat model, the model must use those passages. Without one,
-    the answer is the passages themselves, so the result is still grounded.
+    With an LLM configured, the model must use those passages. Without one, the
+    answer is the passages themselves, so the result is still grounded.
     """
     current = resolve(name_or_id)
     question = question.strip()
     if not question:
         raise BadRequest("Enter a question.")
-    limit = _top_k(top_k)
+    cfg = model_settings.load()
+    brief = _brief(current)
     if current["document_count"] == 0:
-        return {
-            "knowledge_base": _brief(current),
-            "answer": "This knowledge base has no documents yet.",
-            "mode": "empty",
-            "citations": [],
-        }
-    hits = _retrieve(current, question, limit)
+        return {"knowledge_base": brief, "answer": "This knowledge base has no documents yet.", "mode": "empty", "citations": []}
+    hits = _retrieve(current, question, top_k, cfg)
     if not hits:
-        return {
-            "knowledge_base": _brief(current),
-            "answer": "No matching passages were found.",
-            "mode": "empty",
-            "citations": [],
-        }
-    if current["chat_provider"] == "bedrock" and current["chat_model"]:
-        answer = complete(current["chat_model"], current["bedrock_region"], _prompt(question, hits))
-        mode = "bedrock"
+        return {"knowledge_base": brief, "answer": "No matching passages were found.", "mode": "empty", "citations": []}
+    llm = cfg["llm"]
+    if llm["provider"] != "none":
+        answer = models.generate(cfg, _prompt(question, hits))
+        mode = "llm"
     else:
         answer = _passages(hits)
         mode = "retrieval"
     return {
-        "knowledge_base": _brief(current),
+        "knowledge_base": brief,
         "answer": answer,
         "mode": mode,
+        "llm": {"provider": llm["provider"], "model": llm["model"]} if mode == "llm" else None,
         "citations": hits,
     }
 
@@ -258,7 +220,12 @@ def resolve(name_or_id: str) -> dict:
     raise BadRequest(f"More than one knowledge base is named {name_or_id!r}. Use an id: {ids}")
 
 
-def _retrieve(current: dict, question: str, top_k: int) -> list[dict]:
+def _retrieve(current: dict, question: str, top_k: int, cfg: dict) -> list[dict]:
+    """Vector search, then re-rank when a re-rank model is configured.
+
+    The re-ranker needs more candidates than the final count to be useful, so
+    it reorders a larger pool and the best `top_k` are kept.
+    """
     question = question.strip()
     if not question:
         raise BadRequest("Enter a question.")
@@ -266,14 +233,12 @@ def _retrieve(current: dict, question: str, top_k: int) -> list[dict]:
     if current["document_count"] == 0:
         return []
     query = embed(
-        current["embed_provider"],
-        current["embed_model"],
-        current["embed_dim"],
-        current["bedrock_region"],
-        [question],
-        "query",
+        current["embed_provider"], current["embed_model"], current["embed_dim"], [question], "query", cfg
     )[0]
-    return vectors.search(current["collection"], query, limit, current["nn_algorithm"])
+    reranking = cfg["rerank"]["provider"] != "none"
+    pool = min(max(limit * 4, 20), MAX_RERANK_POOL) if reranking else limit
+    hits = vectors.search(current["collection"], query, pool, current["nn_algorithm"])
+    return models.rerank_hits(cfg, question, hits, limit)
 
 
 def _prompt(question: str, citations: list[dict]) -> str:
@@ -305,24 +270,8 @@ def _require(kb_id: str) -> dict:
     return row
 
 
-def _public(row: dict) -> dict:
-    data = dict(row)
-    data["embed_preset"] = _matching_preset(EMBED_PRESETS, row["embed_provider"], row["embed_model"])
-    data["chat_preset"] = _matching_preset(CHAT_PRESETS, row["chat_provider"], row["chat_model"])
-    return data
-
-
 def _brief(row: dict) -> dict:
     return {"id": row["id"], "name": row["name"]}
-
-
-def _matching_preset(presets: list[dict], provider: str, model: str) -> str:
-    for item in presets:
-        if item["id"] == "custom":
-            continue
-        if item["provider"] == provider and item["model"] == model:
-            return item["id"]
-    return "custom"
 
 
 def _name(value: str) -> str:
@@ -349,42 +298,6 @@ def _check_index(distance: str, algorithm: str) -> None:
         raise BadRequest("distance must be cosine, euclid, or dot.")
     if algorithm not in _ALGORITHMS:
         raise BadRequest("nn_algorithm must be hnsw or exact.")
-
-
-def _embed_choice(preset: str, model: str, dim: object) -> tuple[str, str, int]:
-    found = next((item for item in EMBED_PRESETS if item["id"] == preset), None)
-    if found is None:
-        raise BadRequest("Unknown embedding model choice.")
-    if found["id"] != "custom":
-        return found["provider"], found["model"], int(found["dim"])
-    model = model.strip()
-    if not model:
-        raise BadRequest("Enter a Bedrock embedding model id.")
-    if dim is None or dim == "":
-        raise BadRequest("Enter the embedding dimensions for a custom model.")
-    dimensions = _int(dim, "embed_dim")
-    if dimensions < 8 or dimensions > 4096:
-        raise BadRequest("Embedding dimensions must be between 8 and 4096.")
-    return "bedrock", model, dimensions
-
-
-def _chat_choice(preset: str, model: str) -> tuple[str, str]:
-    found = next((item for item in CHAT_PRESETS if item["id"] == preset), None)
-    if found is None:
-        raise BadRequest("Unknown chat model choice.")
-    if found["id"] != "custom":
-        return found["provider"], found["model"]
-    model = model.strip()
-    if not model:
-        raise BadRequest("Enter a Bedrock chat model id.")
-    return "bedrock", model
-
-
-def _region(value: str) -> str:
-    region = value.strip()
-    if region:
-        return region
-    return os.environ.get("AWS_REGION", "").strip() or os.environ.get("AWS_DEFAULT_REGION", "").strip() or "us-east-1"
 
 
 def _top_k(value: object) -> int:
