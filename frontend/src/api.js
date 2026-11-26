@@ -40,11 +40,28 @@ export const api = {
     request(`/api/knowledge-bases/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteKnowledgeBase: (id) => request(`/api/knowledge-bases/${id}`, { method: "DELETE" }),
   listDocuments: (id) => request(`/api/knowledge-bases/${id}/documents`),
-  uploadDocument: (id, file) => {
-    const body = new FormData()
-    body.append("file", file)
-    return request(`/api/knowledge-bases/${id}/documents`, { method: "POST", body })
-  },
+  // XHR rather than fetch, because only XHR reports how many bytes have been sent.
+  uploadDocument: (id, file, onProgress) =>
+    new Promise((resolve, reject) => {
+      const body = new FormData()
+      body.append("file", file)
+      const xhr = new XMLHttpRequest()
+      xhr.open("POST", `/api/knowledge-bases/${id}/documents`)
+      xhr.upload.onprogress = (event) => event.lengthComputable && onProgress?.(event.loaded / event.total)
+      xhr.upload.onload = () => onProgress?.(1)
+      xhr.onerror = () => reject(new Error("The upload could not reach the server."))
+      xhr.onload = () => {
+        let parsed = null
+        try {
+          parsed = xhr.responseText ? JSON.parse(xhr.responseText) : null
+        } catch {
+          // not JSON
+        }
+        if (xhr.status >= 200 && xhr.status < 300) resolve(parsed)
+        else reject(new Error(errorMessage(parsed, xhr.statusText || `Upload failed (${xhr.status})`)))
+      }
+      xhr.send(body)
+    }),
   loadSample: (id) => request(`/api/knowledge-bases/${id}/sample`, { method: "POST" }),
   deleteDocument: (id, documentId) =>
     request(`/api/knowledge-bases/${id}/documents/${documentId}`, { method: "DELETE" }),

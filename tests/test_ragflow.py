@@ -170,6 +170,44 @@ class AppTests(unittest.TestCase):
         self.assertIn("1 MB", rejected.json()["detail"])
         self.assertEqual(self.http.post(url, files={"file": ("big.txt", body)}).status_code, 201)
 
+    def test_uploads_index_in_parallel_without_blocking_the_server(self):
+        import threading
+        import time
+        from unittest import mock
+
+        from backend import service
+
+        created = self._create("Parallel")
+        url = f"/api/knowledge-bases/{created['id']}/documents"
+        real_embed = service.embed
+
+        def slow_embed(*args, **kwargs):
+            time.sleep(0.6)
+            return real_embed(*args, **kwargs)
+
+        statuses, health_times = [], []
+
+        def upload(index):
+            statuses.append(self.http.post(url, files={"file": (f"f{index}.txt", f"File {index} about Dublin.".encode())}).status_code)
+
+        with mock.patch.object(service, "embed", slow_embed):
+            started = time.monotonic()
+            threads = [threading.Thread(target=upload, args=(i,)) for i in range(4)]
+            for thread in threads:
+                thread.start()
+            time.sleep(0.2)
+            for _ in range(3):
+                before = time.monotonic()
+                self.assertEqual(self.http.get("/api/health").status_code, 200)
+                health_times.append(time.monotonic() - before)
+            for thread in threads:
+                thread.join()
+            elapsed = time.monotonic() - started
+        self.assertEqual(statuses, [201] * 4)
+        self.assertLess(max(health_times), 0.3)
+        self.assertLess(elapsed, 4 * 0.6)
+        self.assertEqual(len(self.http.get(url).json()["documents"]), 4)
+
     def test_settings_round_trip(self):
         created = self._create("Editable")
         updated = self.http.patch(

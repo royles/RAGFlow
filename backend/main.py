@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, Response
 
 from backend import accesslog, audit, chunk_preview, judge, model_settings, model_test, service
@@ -154,7 +155,11 @@ def list_documents(kb_id: str) -> dict:
 @app.post("/api/knowledge-bases/{kb_id}/documents", status_code=201)
 async def upload_document(kb_id: str, file: UploadFile = File(...)) -> dict:
     data = await file.read()
-    return _call(lambda: service.add_document(kb_id, file.filename or "document.txt", data))
+    # Indexing embeds every chunk and can take a while. A worker thread keeps the
+    # server responsive and lets several uploads index at the same time.
+    return await run_in_threadpool(
+        lambda: _call(lambda: service.add_document(kb_id, file.filename or "document.txt", data))
+    )
 
 
 @app.post("/api/knowledge-bases/{kb_id}/sample", status_code=201)

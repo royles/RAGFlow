@@ -11,7 +11,7 @@ export default function Manage({ id, onChange }) {
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
   const [busy, setBusy] = useState("")
-  const [progress, setProgress] = useState("")
+  const [uploads, setUploads] = useState([])
   const [dragging, setDragging] = useState(false)
 
   async function reload() {
@@ -87,27 +87,36 @@ export default function Manage({ id, onChange }) {
     })
   }
 
-  // Files go up one at a time so one bad file does not lose the rest.
+  function patchUpload(key, changes) {
+    setUploads((current) => current.map((item) => (item.key === key ? { ...item, ...changes } : item)))
+  }
+
+  // A few files go up and index at once. A bad file fails on its own row.
   async function uploadFiles(files) {
     if (!files.length) return
+    const batch = files.map((file) => ({ key: ++uploadKey, file, name: file.name, size: file.size, status: "queued", sent: 0 }))
+    setUploads(batch)
     setBusy("upload")
     setError("")
     setNotice("")
-    const failed = []
-    for (const [index, file] of files.entries()) {
-      setProgress(files.length > 1 ? `Indexing ${index + 1} of ${files.length}…` : "Indexing…")
-      try {
-        await api.uploadDocument(id, file)
-        await refreshDocuments()
-      } catch (err) {
-        failed.push(`${file.name}: ${err.message}`)
+    let next = 0
+    async function worker() {
+      while (next < batch.length) {
+        const item = batch[next++]
+        patchUpload(item.key, { status: "uploading" })
+        try {
+          const row = await api.uploadDocument(id, item.file, (sent) =>
+            patchUpload(item.key, { sent, status: sent >= 1 ? "indexing" : "uploading" }),
+          )
+          patchUpload(item.key, { status: "done", sent: 1, chunks: row.chunk_count })
+          await refreshDocuments()
+        } catch (err) {
+          patchUpload(item.key, { status: "failed", message: err.message })
+        }
       }
     }
-    setProgress("")
+    await Promise.all(Array.from({ length: Math.min(UPLOAD_PARALLEL, batch.length) }, worker))
     setBusy("")
-    const done = files.length - failed.length
-    if (done) setNotice(`Added ${done} ${done === 1 ? "document" : "documents"}.`)
-    if (failed.length) setError(failed.join(" "))
   }
 
   const onUpload = (event) => {
@@ -168,13 +177,14 @@ export default function Manage({ id, onChange }) {
         <div className="row">
           <label className="file button">
             <input type="file" multiple accept=".txt,.md,.markdown,.csv,.pdf,.docx" onChange={onUpload} disabled={busy === "upload"} />
-            {busy === "upload" ? progress || "Indexing…" : "Upload"}
+            {busy === "upload" ? "Uploading…" : "Upload"}
           </label>
           <button type="button" className="secondary" onClick={onSample} disabled={busy === "sample"}>
             {busy === "sample" ? "Indexing…" : "Load sample"}
           </button>
         </div>
         <p className="hint">Select or drop several files at once. Text, Markdown, CSV, PDF, and DOCX. New files use the chunk size saved below.</p>
+        {uploads.length ? <UploadTracker uploads={uploads} busy={busy === "upload"} onClear={() => setUploads([])} /> : null}
         {documents.length === 0 ? (
           <p className="empty">Nothing uploaded yet.</p>
         ) : (
@@ -236,5 +246,62 @@ export default function Manage({ id, onChange }) {
         </div>
       </form>
     </main>
+  )
+}
+
+const UPLOAD_PARALLEL = 3
+let uploadKey = 0
+
+const STATUS = {
+  queued: "Waiting",
+  uploading: "Uploading",
+  indexing: "Indexing",
+  done: "Added",
+  failed: "Failed",
+}
+
+function UploadTracker({ uploads, busy, onClear }) {
+  const finished = uploads.filter((item) => item.status === "done" || item.status === "failed").length
+  const failed = uploads.filter((item) => item.status === "failed").length
+  return (
+    <div className="tracker" aria-live="polite">
+      <div className="tracker-head">
+        <strong>
+          {busy ? `${finished} of ${uploads.length} finished` : `${uploads.length - failed} added${failed ? `, ${failed} failed` : ""}`}
+        </strong>
+        {busy ? null : (
+          <button type="button" className="ghost" onClick={onClear}>
+            Clear
+          </button>
+        )}
+      </div>
+      <ul>
+        {uploads.map((item) => (
+          <li key={item.key} className={item.status}>
+            <div className="line">
+              <span className="name" title={item.name}>
+                {item.name}
+              </span>
+              <span className="state">
+                {STATUS[item.status]}
+                {item.status === "uploading" ? ` ${Math.round(item.sent * 100)}%` : ""}
+                {item.status === "done" ? ` · ${item.chunks} ${item.chunks === 1 ? "chunk" : "chunks"}` : ""}
+              </span>
+            </div>
+            <div
+              className={`meter${item.status === "indexing" ? " busy" : ""}`}
+              role="progressbar"
+              aria-label={item.name}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.round((item.status === "done" || item.status === "failed" ? 1 : item.sent) * 100)}
+            >
+              <span style={{ width: `${(item.status === "queued" ? 0 : item.sent) * 100}%` }} />
+            </div>
+            {item.message ? <p className="why-failed">{item.message}</p> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
